@@ -8,7 +8,8 @@ const PERMISOS = [
   "android.permission.SCHEDULE_EXACT_ALARM",
   "android.permission.RECEIVE_BOOT_COMPLETED",
   "android.permission.VIBRATE",
-  "android.permission.WAKE_LOCK"
+  "android.permission.WAKE_LOCK",
+  "android.permission.USE_BIOMETRIC"
 ];
 
 if (!fs.existsSync(RUTA)) {
