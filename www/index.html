@@ -379,6 +379,23 @@
 </style>
 </head>
 <body>
+
+<!-- Pantalla de bloqueo (solo visible si el usuario activó el candado) -->
+<div id="ccLock" style="display:none; position:fixed; inset:0; z-index:99999;
+     background:linear-gradient(150deg,#12A57A 0%,#0B7D5C 50%,#0A4536 100%);
+     color:#fff; flex-direction:column; align-items:center; justify-content:center; padding:30px; text-align:center;">
+  <div style="font-size:56px; margin-bottom:8px;">🔒</div>
+  <div style="font-size:22px; font-weight:800; margin-bottom:6px;">Cuentas Claras</div>
+  <div id="ccLockMsg" style="font-size:14px; opacity:.9; max-width:280px; line-height:1.5; margin-bottom:26px;">
+    Desbloquea para ver tus cuentas.
+  </div>
+  <button id="ccLockBtn" onclick="ccIntentarDesbloqueo()"
+    style="background:#fff; color:#0B7D5C; border:none; border-radius:14px;
+    padding:14px 32px; font-size:16px; font-weight:700; cursor:pointer;">
+    Desbloquear
+  </button>
+</div>
+
 <div id="phone">
 
   <header class="topbar">
@@ -713,6 +730,8 @@
       <div id="bloqueDonacion"></div>
 
       <div id="espacioReservado" style="height:8px;"></div>
+
+      <div id="bloqueSeguridad"></div>
 
       <h2 class="section-title">Datos<div class="rule"></div></h2>
       <div class="card">
@@ -2755,7 +2774,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "3.3";
+const APP_VERSION = "3.4";
 
 /* =====================================================================
    CONTACTO Y APOYO
@@ -2802,6 +2821,35 @@ function copiarFallback(txt, ok){
     document.body.removeChild(ta);
     ok();
   }catch(e){ toast("No se pudo copiar. Anótalo: " + txt); }
+}
+
+function renderSeguridad(){
+  const cont = document.getElementById("bloqueSeguridad");
+  if(!cont) return;
+  // Solo tiene sentido en la app instalada (APK)
+  if(!ccBiometria()){ cont.innerHTML = ""; return; }
+
+  const activo = ccBloqueoActivado();
+  cont.innerHTML = `
+    <h2 class="section-title">Seguridad<div class="rule"></div></h2>
+    <div class="card">
+      <div class="switch-row" style="align-items:center;">
+        <div style="min-width:0; flex:1;">
+          <div class="s-txt">🔒 Bloqueo con huella</div>
+          <div class="s-sub">${activo
+            ? "Activado. Se pide tu huella o el desbloqueo del celular al abrir la app."
+            : "Protege tus cuentas: pide tu huella o el desbloqueo del celular al abrir la app."}</div>
+        </div>
+        <label class="switch" style="flex:0 0 auto;">
+          <input type="checkbox" ${activo ? "checked" : ""} onchange="ccToggleBloqueo(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="hint" style="margin-top:10px;">
+        Usa el mismo desbloqueo de tu celular, así que <b>no hay ninguna clave nueva que memorizar</b>.
+        Recuerda hacer respaldo de tus datos de vez en cuando.
+      </div>
+    </div>`;
 }
 
 function renderDonacion(){
@@ -3389,6 +3437,7 @@ function renderAll(){
   renderDeudas();
   renderAhorros();
   renderAjustes();
+  renderSeguridad();
   renderDonacion();
 }
 
@@ -3405,6 +3454,104 @@ programarAlarma();
 document.addEventListener("visibilitychange", ()=>{
   if(!document.hidden){ programarAlarma(); renderRecordatorioBanner(); }
 });
+
+/* =====================================================================
+   BLOQUEO POR HUELLA / CREDENCIAL DEL SISTEMA
+   Opcional. No crea ninguna clave propia: usa el desbloqueo del celular,
+   por eso el usuario nunca puede "olvidar la contraseña".
+   ===================================================================== */
+const CC_LOCK_KEY = "cc_bloqueo_activo";
+let ccDesbloqueada = false;
+
+function ccBiometria(){
+  try{
+    if(!window.Capacitor) return null;
+    const p = Capacitor.Plugins || {};
+    return p.NativeBiometric || null;
+  }catch(e){ return null; }
+}
+function ccBloqueoActivado(){
+  try{ return localStorage.getItem(CC_LOCK_KEY) === "1"; }catch(e){ return false; }
+}
+function ccMostrarLock(mostrar){
+  const el = document.getElementById("ccLock");
+  if(el) el.style.display = mostrar ? "flex" : "none";
+}
+
+async function ccHayBiometria(){
+  const B = ccBiometria();
+  if(!B) return false;
+  try{
+    const r = await B.isAvailable({ useFallback: true });
+    return !!r.isAvailable;
+  }catch(e){ return false; }
+}
+
+/* Pide la huella (o credencial del sistema). Devuelve true si autenticó. */
+async function ccVerificar(){
+  const B = ccBiometria();
+  if(!B) return true; // sin plugin (navegador) no bloquea
+  try{
+    await B.verifyIdentity({
+      reason: "Desbloquea Cuentas Claras",
+      title: "Cuentas Claras",
+      subtitle: "Verifica tu identidad",
+      description: "Usa tu huella o el desbloqueo del celular",
+      useFallback: true,
+      maxAttempts: 5
+    });
+    return true;   // si no lanza error, autenticó
+  }catch(e){
+    return false;  // canceló o falló
+  }
+}
+
+async function ccIntentarDesbloqueo(){
+  const msg = document.getElementById("ccLockMsg");
+  const ok = await ccVerificar();
+  if(ok){
+    ccDesbloqueada = true;
+    ccMostrarLock(false);
+  }else{
+    if(msg) msg.textContent = "No se pudo verificar. Intenta de nuevo.";
+  }
+}
+
+/* Se llama al arrancar y al volver del segundo plano */
+async function ccAplicarBloqueoInicial(){
+  if(!ccBiometria()){ ccMostrarLock(false); return; }   // navegador: nunca bloquea
+  if(!ccBloqueoActivado()){ ccMostrarLock(false); return; }
+  ccDesbloqueada = false;
+  ccMostrarLock(true);
+  await ccIntentarDesbloqueo();
+}
+
+/* Activar / desactivar desde Ajustes */
+async function ccToggleBloqueo(activar){
+  const B = ccBiometria();
+  if(activar){
+    if(!B){ toast("El bloqueo solo funciona en la app instalada (APK)."); renderAjustes(); return; }
+    const disp = await ccHayBiometria();
+    if(!disp){
+      toast("Primero configura huella o bloqueo de pantalla en tu celular.");
+      renderAjustes();
+      return;
+    }
+    // pide autenticar una vez para confirmar que funciona
+    const ok = await ccVerificar();
+    if(!ok){ toast("No se activó: verificación cancelada."); renderAjustes(); return; }
+    try{ localStorage.setItem(CC_LOCK_KEY, "1"); }catch(e){}
+    ccDesbloqueada = true;
+    toast("Bloqueo activado ✓");
+  }else{
+    // para quitarlo también pedimos verificar (que no lo apague un curioso)
+    const ok = await ccVerificar();
+    if(!ok){ toast("No se desactivó: verificación cancelada."); renderAjustes(); return; }
+    try{ localStorage.removeItem(CC_LOCK_KEY); }catch(e){}
+    toast("Bloqueo desactivado.");
+  }
+  renderAjustes();
+}
 
 /* ---- Arranque de la capa nativa (solo dentro del APK) ---- */
 function ccIniciarNativo(){
@@ -3426,12 +3573,22 @@ function ccIniciarNativo(){
     .then(()=> renderEstadosAlarmas())
     .catch(()=>{});
 
-  // cuando el APK vuelve al frente, rellena el colchon de ocurrencias
+  // Aplica el bloqueo por huella si el usuario lo activó
+  ccAplicarBloqueoInicial();
+
+  // cuando el APK vuelve al frente, rellena el colchon y vuelve a bloquear
   try{
     const AppP = Capacitor.Plugins.App;
     if(AppP && AppP.addListener){
       AppP.addListener("appStateChange", (st)=>{
-        if(st.isActive){ ccReprogramarNativo().then(()=>renderEstadosAlarmas()); }
+        if(st.isActive){
+          ccReprogramarNativo().then(()=>renderEstadosAlarmas());
+          // si estaba bloqueada y volvió del fondo, pide huella otra vez
+          if(ccBloqueoActivado() && !ccDesbloqueada){ ccAplicarBloqueoInicial(); }
+        }else{
+          // al irse al fondo, marca para re-bloquear al volver
+          if(ccBloqueoActivado()) ccDesbloqueada = false;
+        }
       });
     }
   }catch(e){}
