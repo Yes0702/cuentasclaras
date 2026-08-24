@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -778,32 +777,16 @@ const ANIO_HOY = new Date().getFullYear();
 
 /* nombre, tipo, prioridad, % del ingreso original (se migra al nuevo modelo) */
 const RUBROS_DEFAULT = [
-  ["Diezmo y Ofrenda","Fijo",1,15],
-  ["Arriendo / Cuota Apto","Fijo",2,25],
-  ["Servicios","Fijo",3,5],
-  ["Colegio","Fijo",4,5],
-  ["Jardín","Fijo",5,3],
-  ["Planilla EPS","Fijo",6,4],
-  ["Mercado","Variable necesario",7,8],
-  ["Fruver","Variable necesario",8,3],
-  ["Carnes","Variable necesario",9,3],
-  ["Gasolina","Variable necesario",10,4],
-  ["Transporte","Variable necesario",11,2],
-  ["Farmacia","Variable necesario",12,1],
-  ["Salud Citas","Variable necesario",13,1],
-  ["Alcancía (Ahorro)","Ahorro",14,5],
-  ["Ferretería","Variable necesario",15,1],
-  ["Cadena","Variable necesario",16,1],
-  ["Actividad Jardín","Variable necesario",17,1],
-  ["Onces","Flexible/Deseo",18,1],
-  ["Desayunos","Flexible/Deseo",19,1],
-  ["Break","Flexible/Deseo",20,1],
-  ["Restaurante","Flexible/Deseo",21,2],
-  ["Salón de Belleza","Flexible/Deseo",22,1],
-  ["Temu","Flexible/Deseo",23,1],
-  ["Luna","Flexible/Deseo",24,1],
-  ["Despierta con Amor","Flexible/Deseo",25,1],
-  ["Extras","Flexible/Deseo",26,4],
+  ["Arriendo / Cuota","Fijo",1,28],
+  ["Servicios","Fijo",2,7],
+  ["Internet y Celular","Fijo",3,4],
+  ["Mercado","Variable necesario",4,18],
+  ["Transporte","Variable necesario",5,6],
+  ["Gasolina","Variable necesario",6,6],
+  ["Salud / Farmacia","Variable necesario",7,4],
+  ["Ahorro","Ahorro",8,10],
+  ["Restaurantes","Flexible/Deseo",9,7],
+  ["Extras","Flexible/Deseo",10,10],
 ];
 
 function alarmaDefault(){
@@ -826,7 +809,7 @@ function normalizarAlarma(a){
 }
 
 function defaultState(){
-  const ingresos = [{ id: uid(), nombre: "Ingreso principal", monto: 1000000 }];
+  const ingresos = [{ id: uid(), nombre: "Ingreso principal", monto: 3000000 }];
   const ingreso = ingresos.reduce((s,i)=>s+i.monto,0);
   return {
     version: 2,
@@ -2766,13 +2749,13 @@ const CONFIG = {
   whatsapp: "573112070146",
 
   // Donaciones. Vacía las que no uses.
-  nequi:   "3112070146",        // tu número de Nequi
+  nequi:   "",                  // Nequi desactivado (solo Bre-B)
   breb:    "@yesids259",        // tu llave Bre-B (alfanumérica, celular o cédula)
   pseUrl:  "",                  // link de pago (Wompi/ePayco). Vacío = oculto.
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "3.2";
+const APP_VERSION = "3.3";
 
 /* =====================================================================
    CONTACTO Y APOYO
@@ -2827,27 +2810,43 @@ function renderDonacion(){
   const hayAlgo = CONFIG.nequi || CONFIG.breb || CONFIG.pseUrl;
   if(!CONFIG.mostrarDonacion || !hayAlgo){ cont.innerHTML = ""; return; }
 
+  // Fila genérica (para Nequi u otros medios de texto)
   const fila = (etiqueta, valor, nota) => `
-    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line,#eee);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0;">
       <div style="min-width:0; flex:1;">
         <div class="s-txt">${etiqueta}${nota ? ` <span style="font-weight:500; color:var(--ink-soft); font-size:11px;">· ${nota}</span>` : ""}</div>
-        <div class="s-sub" style="font-size:15px; font-weight:600; color:var(--ink); letter-spacing:0.3px; margin-top:3px; overflow-wrap:anywhere;">${esc(valor)}</div>
+        <div style="font-size:16px; font-weight:700; color:var(--ink); letter-spacing:0.4px; margin-top:3px; overflow-wrap:anywhere;">${esc(valor)}</div>
       </div>
-      <button class="btn-ghost" style="flex:0 0 auto; margin-top:0; white-space:nowrap; padding:8px 16px;" onclick="copiarTexto('${esc(valor)}','${etiqueta} copiado')">Copiar</button>
+      <button class="btn-ghost" style="flex:0 0 auto; margin-top:0; white-space:nowrap; padding:9px 18px;" onclick="copiarTexto('${esc(valor)}','${etiqueta} copiado')">Copiar</button>
     </div>`;
+
+  // Bloque especial de Bre-B: logo arriba, llave horizontal grande, botón ancho
+  const bloqueBreb = CONFIG.breb ? `
+    <div style="padding:6px 0 2px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <img src="icons/breb-logo.png" alt="Bre-B" style="height:26px; width:auto; display:block;">
+        <span style="font-weight:500; color:var(--ink-soft); font-size:11.5px;">· gratis</span>
+      </div>
+      <div style="background:var(--bg-soft,#f4f6f5); border-radius:12px; padding:14px 16px; text-align:center; margin-bottom:10px;">
+        <div style="font-size:20px; font-weight:800; color:var(--ink); letter-spacing:0.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(CONFIG.breb)}</div>
+      </div>
+      <button class="btn-primary" style="width:100%; margin:0;" onclick="copiarTexto('${esc(CONFIG.breb)}','Llave Bre-B copiada')">Copiar llave</button>
+      <div class="hint" style="margin-top:10px; text-align:center;">
+        Funciona desde <b>cualquier banco</b>: Nequi, Bancolombia, Daviplata, Lulo, Nu y más.
+      </div>
+    </div>` : "";
 
   cont.innerHTML = `
     <h2 class="section-title">Apoya la app<div class="rule"></div></h2>
     <div class="card">
-      <div class="hint" style="margin-bottom:12px;">
+      <div class="hint" style="margin-bottom:14px;">
         Cuentas Claras es gratis, sin anuncios y sin cuentas. Si te está sirviendo
         y quieres aportar algo para mantenerla, cualquier monto ayuda. <b>Es totalmente opcional</b>
         y no desbloquea nada: la app funciona completa para todos.
       </div>
       ${CONFIG.nequi ? fila("Nequi", CONFIG.nequi, "gratis") : ""}
-      ${CONFIG.breb  ? fila("Bre-B", CONFIG.breb, "gratis, cualquier banco") : ""}
-      ${CONFIG.pseUrl ? `<button class="btn-ghost" style="width:100%;margin-top:10px;" onclick="abrirExterno('${esc(CONFIG.pseUrl)}')">Pagar con PSE / tarjeta</button>` : ""}
-      <div class="hint" style="margin-top:12px;">Toca “Copiar” y pégalo en tu app del banco.</div>
+      ${bloqueBreb}
+      ${CONFIG.pseUrl ? `<button class="btn-ghost" style="width:100%;margin-top:12px;" onclick="abrirExterno('${esc(CONFIG.pseUrl)}')">Pagar con PSE / tarjeta</button>` : ""}
     </div>`;
 }
 
