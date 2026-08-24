@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -65,6 +66,7 @@
     background:linear-gradient(140deg,#13B183 0%,#0F8F6B 45%,#0A5F49 100%);
     color:#fff;
     padding:16px 18px 20px;
+    padding-top:calc(16px + env(safe-area-inset-top, 0px));
     border-radius:0 0 26px 26px;
     flex-shrink:0;
     position:relative; z-index:2;
@@ -2770,7 +2772,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "3.1";
+const APP_VERSION = "3.2";
 
 /* =====================================================================
    CONTACTO Y APOYO
@@ -2826,12 +2828,12 @@ function renderDonacion(){
   if(!CONFIG.mostrarDonacion || !hayAlgo){ cont.innerHTML = ""; return; }
 
   const fila = (etiqueta, valor, nota) => `
-    <div class="switch-row" style="align-items:center;">
-      <div style="min-width:0;">
-        <div class="s-txt">${etiqueta}</div>
-        <div class="s-sub" style="word-break:break-all;">${esc(valor)}${nota ? " · " + nota : ""}</div>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line,#eee);">
+      <div style="min-width:0; flex:1;">
+        <div class="s-txt">${etiqueta}${nota ? ` <span style="font-weight:500; color:var(--ink-soft); font-size:11px;">· ${nota}</span>` : ""}</div>
+        <div class="s-sub" style="font-size:15px; font-weight:600; color:var(--ink); letter-spacing:0.3px; margin-top:3px; overflow-wrap:anywhere;">${esc(valor)}</div>
       </div>
-      <button class="btn-ghost" style="flex:0 0 auto;" onclick="copiarTexto('${esc(valor)}','${etiqueta} copiado')">Copiar</button>
+      <button class="btn-ghost" style="flex:0 0 auto; margin-top:0; white-space:nowrap; padding:8px 16px;" onclick="copiarTexto('${esc(valor)}','${etiqueta} copiado')">Copiar</button>
     </div>`;
 
   cont.innerHTML = `
@@ -3409,6 +3411,17 @@ document.addEventListener("visibilitychange", ()=>{
 function ccIniciarNativo(){
   if(!ccNativo()) return;
   document.body.classList.add("es-apk");
+
+  // La barra de estado de Android no debe encimarse con el contenido
+  try{
+    const SB = Capacitor.Plugins.StatusBar;
+    if(SB){
+      if(SB.setOverlaysWebView) SB.setOverlaysWebView({ overlay: false });
+      if(SB.setBackgroundColor) SB.setBackgroundColor({ color: "#0F8F6B" });
+      if(SB.setStyle) SB.setStyle({ style: "LIGHT" });
+    }
+  }catch(e){}
+
   ccPedirPermisoNativo()
     .then(()=> ccReprogramarNativo())
     .then(()=> renderEstadosAlarmas())
