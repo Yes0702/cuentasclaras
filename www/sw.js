@@ -2,7 +2,7 @@
    Cuentas Claras - Service Worker
    v3: cache + alarmas que funcionan con la app CERRADA
    ===================================================================== */
-const CACHE_NAME  = "cuentas-claras-v3";
+const CACHE_NAME  = "cuentas-claras-v4";
 const ALARM_CACHE = "cuentas-claras-alarmas";
 const ALARM_KEY   = "/__cc_alarmas__";
 const PERIODIC_TAG = "cc-revisar-alarmas";
@@ -15,7 +15,8 @@ const ASSETS = [
   "./icons/icon-512.png",
   "./icons/icon-180.png",
   "./icons/icon-192-maskable.png",
-  "./icons/icon-512-maskable.png"
+  "./icons/icon-512-maskable.png",
+  "./icons/breb-logo.png"
 ];
 
 /* ------------------------- INSTALL / ACTIVATE ------------------------ */
