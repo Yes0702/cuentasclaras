@@ -1,0 +1,59 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Bajar el codigo
+        uses: actions/checkout@v4
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Instalar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Crear proyecto Android
+        run: npx cap add android
+
+      - name: Agregar permisos de alarmas
+        run: node scripts/permisos-android.js
+
+      - name: Generar iconos y splash con el logo
+        run: npx @capacitor/assets generate --android || echo "Sigo con los iconos por defecto"
+
+      - name: Sincronizar la app web
+        run: npx cap sync android
+
+      - name: Compilar el APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Renombrar el APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk CuentasClaras.apk
+
+      - name: Publicar el APK descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: CuentasClaras-APK
+          path: CuentasClaras.apk
+          retention-days: 90
