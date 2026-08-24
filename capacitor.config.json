@@ -1,0 +1,13 @@
+{
+  "appId": "com.cuentasclaras.presupuesto",
+  "appName": "Cuentas Claras",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "iconColor": "#0F8F6B"
+    }
+  }
+}
