@@ -1,5 +1,6 @@
 name: Compilar APK
 
+# Se ejecuta al subir cambios y tambien a mano desde la pestaña Actions
 on:
   push:
     branches: [main, master]
@@ -35,6 +36,16 @@ jobs:
 
       - name: Agregar permisos de alarmas
         run: node scripts/permisos-android.js
+
+      - name: Numerar versión automáticamente
+        run: |
+          GRADLE=android/app/build.gradle
+          # versionCode = número de compilación (siempre creciente)
+          sed -i "s/versionCode [0-9]*/versionCode ${GITHUB_RUN_NUMBER}/" $GRADLE
+          # versionName = 3.5.<build> para que se vea en Android
+          sed -i "s/versionName \"[^\"]*\"/versionName \"3.5.${GITHUB_RUN_NUMBER}\"/" $GRADLE
+          echo "--- versión aplicada ---"
+          grep -E "versionCode|versionName" $GRADLE
 
       - name: Generar iconos y splash con el logo
         run: npx @capacitor/assets generate --android || echo "Sigo con los iconos por defecto"
