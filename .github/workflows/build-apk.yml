@@ -37,21 +37,21 @@ jobs:
       - name: Agregar permisos de alarmas
         run: node scripts/permisos-android.js
 
-      - name: Numerar versión automáticamente
-        run: |
-          GRADLE=android/app/build.gradle
-          # versionCode = número de compilación (siempre creciente)
-          sed -i "s/versionCode [0-9]*/versionCode ${GITHUB_RUN_NUMBER}/" $GRADLE
-          # versionName = 3.7.<build> para que se vea en Android
-          sed -i "s/versionName \"[^\"]*\"/versionName \"3.7.${GITHUB_RUN_NUMBER}\"/" $GRADLE
-          echo "--- versión aplicada ---"
-          grep -E "versionCode|versionName" $GRADLE
-
       - name: Generar iconos y splash con el logo
         run: npx @capacitor/assets generate --android || echo "Sigo con los iconos por defecto"
 
       - name: Sincronizar la app web
         run: npx cap sync android
+
+      - name: Numerar versión automáticamente
+        run: |
+          GRADLE=android/app/build.gradle
+          # versionCode = número de compilación (siempre creciente)
+          sed -i "s/versionCode [0-9]*/versionCode ${GITHUB_RUN_NUMBER}/" $GRADLE
+          # versionName = 3.8.<build> para que se vea en Android
+          sed -i "s/versionName \"[^\"]*\"/versionName \"3.8.${GITHUB_RUN_NUMBER}\"/" $GRADLE
+          echo "--- versión aplicada ---"
+          grep -E "versionCode|versionName" $GRADLE
 
       - name: Compilar el APK
         run: |
