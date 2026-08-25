@@ -56,14 +56,15 @@ jobs:
       - name: Restaurar la clave de firma
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/cuentasclaras.keystore
-          echo "Keystore restaurado."
+          echo "Keystore restaurado en: $(pwd)/android/app/cuentasclaras.keystore"
+          ls -la android/app/cuentasclaras.keystore
 
       - name: Compilar el APK firmado
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon \
-            -Pandroid.injected.signing.store.file=cuentasclaras.keystore \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/cuentasclaras.keystore" \
             -Pandroid.injected.signing.store.password=CuentasClaras2026 \
             -Pandroid.injected.signing.key.alias=cuentasclaras \
             -Pandroid.injected.signing.key.password=CuentasClaras2026
