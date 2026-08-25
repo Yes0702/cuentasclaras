@@ -48,8 +48,8 @@ jobs:
           GRADLE=android/app/build.gradle
           # versionCode = número de compilación (siempre creciente)
           sed -i "s/versionCode [0-9]*/versionCode ${GITHUB_RUN_NUMBER}/" $GRADLE
-          # versionName = 4.0.<build> para que se vea en Android
-          sed -i "s/versionName \"[^\"]*\"/versionName \"4.0.${GITHUB_RUN_NUMBER}\"/" $GRADLE
+          # versionName = 4.2.<build> para que se vea en Android
+          sed -i "s/versionName \"[^\"]*\"/versionName \"4.2.${GITHUB_RUN_NUMBER}\"/" $GRADLE
           echo "--- versión aplicada ---"
           grep -E "versionCode|versionName" $GRADLE
 
