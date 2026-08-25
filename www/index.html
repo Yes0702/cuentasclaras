@@ -759,7 +759,7 @@
 
       <h2 class="section-title">Acerca de<div class="rule"></div></h2>
       <div class="card">
-        <div class="hint">Cuentas Claras v2 · Todo se guarda solo en este dispositivo. Exporta un respaldo de vez en cuando para no perder tu historial.</div>
+        <div class="hint">Cuentas Claras <span id="ccVerAcerca"></span>· Todo se guarda solo en este dispositivo. Exporta un respaldo de vez en cuando para no perder tu historial.</div>
       </div>
     </section>
 
@@ -2788,7 +2788,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "3.6";
+const APP_VERSION = "3.7";
 
 /* =====================================================================
    CONTACTO Y APOYO
@@ -3327,6 +3327,8 @@ function renderEstadosAlarmas(){
   });
 }
 function renderAjustes(){
+  const verEl = document.getElementById("ccVerAcerca");
+  if(verEl) verEl.textContent = "v" + APP_VERSION + " ";
   const cont = document.getElementById("alarmasList");
   if(!cont) return;
   const alarmas = state.alarmas || [];
@@ -3580,18 +3582,27 @@ async function ccToggleBloqueo(activar){
     }
     // pide autenticar una vez para confirmar que funciona
     const ok = await ccVerificar();
-    if(!ok){ toast("No se activó: verificación cancelada."); renderAjustes(); return; }
+    if(!ok){ toast("No se activó: verificación cancelada."); ccRefrescarAjustes(); return; }
     try{ localStorage.setItem(CC_LOCK_KEY, "1"); }catch(e){}
     ccDesbloqueada = true;
     toast("Bloqueo activado ✓");
   }else{
     // para quitarlo también pedimos verificar (que no lo apague un curioso)
     const ok = await ccVerificar();
-    if(!ok){ toast("No se desactivó: verificación cancelada."); renderAjustes(); return; }
+    if(!ok){ toast("No se desactivó: verificación cancelada."); ccRefrescarAjustes(); return; }
     try{ localStorage.removeItem(CC_LOCK_KEY); }catch(e){}
     toast("Bloqueo desactivado.");
   }
-  renderAjustes();
+  ccRefrescarAjustes();
+}
+
+/* Redibuja Ajustes varias veces tras el diálogo de huella, porque algunos
+   celulares no refrescan la pantalla hasta que la app "despierta". */
+function ccRefrescarAjustes(){
+  renderSeguridad();
+  requestAnimationFrame(()=>renderSeguridad());
+  setTimeout(()=>renderSeguridad(), 150);
+  setTimeout(()=>renderSeguridad(), 500);
 }
 
 /* ---- Arranque de la capa nativa (solo dentro del APK) ---- */
