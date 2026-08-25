@@ -130,7 +130,7 @@
     padding:16px; margin-bottom:12px; box-shadow:var(--shadow);
     display:flex; align-items:center; gap:16px;
   }
-  .ring{width:96px; height:96px; flex-shrink:0; position:relative;}
+  .ring{width:104px; height:104px; flex-shrink:0; position:relative;}
   .ring svg{width:100%; height:100%; display:block;}
   .ring .ring-txt{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -283,8 +283,9 @@
     text-align:center; padding:28px 16px; color:var(--ink-soft); font-size:13px; line-height:1.5;
     border:1px dashed var(--line); border-radius:var(--radius); background:var(--surface-2);
   }
-  .filter-row{display:flex; gap:8px; margin-bottom:12px;}
-  .filter-row select{flex:1;}
+  .filter-row{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
+  .filter-row select{flex:1 1 30%; min-width:110px;}
+  .filter-row select#filtroAnio{flex:0 1 90px; min-width:80px;}
 
   .status-pill{display:inline-block; font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:99px;}
   .status-pill.ok{background:var(--brand-soft); color:var(--brand-dark);}
@@ -429,9 +430,9 @@
       <div class="hero">
         <div class="ring">
           <svg viewBox="0 0 120 120">
-            <circle cx="60" cy="60" r="52" fill="none" stroke="#EEF3F1" stroke-width="12"/>
-            <circle id="ringFill" cx="60" cy="60" r="52" fill="none" stroke="#12A57A" stroke-width="12"
-                    stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="326.73"
+            <circle cx="60" cy="60" r="53" fill="none" stroke="#EEF3F1" stroke-width="8"/>
+            <circle id="ringFill" cx="60" cy="60" r="53" fill="none" stroke="#12A57A" stroke-width="8"
+                    stroke-linecap="round" stroke-dasharray="333.01" stroke-dashoffset="333.01"
                     transform="rotate(-90 60 60)"/>
           </svg>
           <div class="ring-txt"><b id="ringPct">0%</b><span>asignado</span></div>
@@ -1270,7 +1271,7 @@ function renderDashboard(){
 
   // anillo de asignación
   const avanceRing = Math.max(0, Math.min(100, repartido));
-  const circ = 2*Math.PI*52;
+  const circ = 2*Math.PI*53;
   const ring = document.getElementById("ringFill");
   ring.setAttribute("stroke-dasharray", circ.toFixed(2));
   ring.setAttribute("stroke-dashoffset", (circ*(1-avanceRing/100)).toFixed(2));
@@ -2797,7 +2798,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "3.9";
+const APP_VERSION = "4.0";
 
 /* =====================================================================
    CONTACTO Y APOYO
