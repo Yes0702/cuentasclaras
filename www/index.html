@@ -200,6 +200,7 @@
     width:100%; font-family:var(--font-body); font-size:14.5px; color:var(--ink); font-weight:500;
     background:var(--surface-2); border:1px solid var(--line); border-radius:11px;
     padding:11px 12px; outline:none; transition:border-color .15s, box-shadow .15s;
+    box-sizing:border-box; max-width:100%;
   }
   input:focus, select:focus, textarea:focus{border-color:var(--brand); box-shadow:0 0 0 3px rgba(18,165,122,.13); background:#fff;}
   input[type=number], .mono-input{font-family:var(--font-mono);}
@@ -210,6 +211,7 @@
     font-family:var(--font-body); font-weight:700; font-size:14px;
     cursor:pointer; border:none; border-radius:12px; padding:12px 16px;
     transition:transform .08s ease, background .15s;
+    overflow-wrap:break-word; word-break:break-word; box-sizing:border-box; max-width:100%;
   }
   button:active{transform:scale(.97);}
   .btn-primary{background:var(--brand); color:#fff; width:100%; margin-top:14px; box-shadow:0 6px 16px rgba(18,165,122,.28);}
@@ -229,15 +231,20 @@
   .group-header .g-right{font-family:var(--font-mono); color:var(--ink);}
   .group-box{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;}
   .rubro-row{
-    display:grid; grid-template-columns:1fr 84px 88px; gap:8px; align-items:center;
+    display:grid; grid-template-columns:1fr minmax(84px,auto) minmax(72px,auto); gap:8px; align-items:center;
     padding:10px 12px; border-bottom:1px solid var(--line-soft); cursor:pointer;
   }
   .rubro-row:last-child{border-bottom:none;}
-  .rubro-row .r-name{font-size:13.5px; line-height:1.25; font-weight:600; min-width:0;}
+  .rubro-row .r-name{font-size:13.5px; line-height:1.25; font-weight:600; min-width:0; overflow-wrap:anywhere;}
   .rubro-row .r-name .prio{font-family:var(--font-mono); font-size:10px; color:var(--ink-mute); display:block; font-weight:400; margin-top:1px;}
-  .rubro-row input{padding:7px 6px; text-align:center; font-size:13px; border-radius:9px;}
-  .rubro-row .r-monto{font-family:var(--font-mono); font-size:12.5px; text-align:right; color:var(--ink-soft); font-weight:500;}
+  .rubro-row input{padding:7px 6px; text-align:center; font-size:13px; border-radius:9px; width:100%; min-width:0; box-sizing:border-box;}
+  .rubro-row .r-monto{font-family:var(--font-mono); font-size:12.5px; text-align:right; color:var(--ink-soft); font-weight:500; min-width:0; overflow-wrap:anywhere;}
   .rubro-row .r-monto b{display:block; color:var(--ink); font-weight:600; font-size:13px;}
+  /* Cuando el sistema usa letra muy grande, apila la fila para que nada se corte */
+  @media (max-width: 360px){
+    .rubro-row{ grid-template-columns:1fr minmax(70px,auto); }
+    .rubro-row .r-monto{ grid-column:1 / -1; text-align:left; }
+  }
   .group-total{
     display:flex; justify-content:space-between; font-family:var(--font-mono);
     font-size:12.5px; font-weight:600; padding:10px 12px; background:var(--surface-2); color:var(--ink);
@@ -292,8 +299,8 @@
   .status-pill.warn{background:var(--amber-soft); color:#94720B;}
   .status-pill.bad{background:var(--red-soft); color:var(--red);}
 
-  .io-row{display:flex; gap:8px; margin-top:10px;}
-  .io-row button{flex:1; margin-top:0;}
+  .io-row{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+  .io-row button{flex:1 1 45%; min-width:120px; margin-top:0;}
   input[type=file]{display:none;}
 
   .resumen-row{padding:9px 2px; border-bottom:1px solid var(--line-soft);}
@@ -2781,7 +2788,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "3.5";
+const APP_VERSION = "3.6";
 
 /* =====================================================================
    CONTACTO Y APOYO
@@ -3491,6 +3498,7 @@ document.addEventListener("visibilitychange", ()=>{
    ===================================================================== */
 const CC_LOCK_KEY = "cc_bloqueo_activo";
 let ccDesbloqueada = false;
+let ccAutenticando = false;  // true mientras se muestra el diálogo de huella a propósito
 
 function ccBiometria(){
   try{
@@ -3520,6 +3528,7 @@ async function ccHayBiometria(){
 async function ccVerificar(){
   const B = ccBiometria();
   if(!B) return true; // sin plugin (navegador) no bloquea
+  ccAutenticando = true;
   try{
     await B.verifyIdentity({
       reason: "Desbloquea Cuentas Claras",
@@ -3532,6 +3541,9 @@ async function ccVerificar(){
     return true;   // si no lanza error, autenticó
   }catch(e){
     return false;  // canceló o falló
+  }finally{
+    // pequeño respiro para que el cambio de foco del diálogo no cuente como "volver del fondo"
+    setTimeout(()=>{ ccAutenticando = false; }, 800);
   }
 }
 
@@ -3610,6 +3622,8 @@ function ccIniciarNativo(){
     const AppP = Capacitor.Plugins.App;
     if(AppP && AppP.addListener){
       AppP.addListener("appStateChange", (st)=>{
+        // Si estamos autenticando a propósito, ignorar el cambio de foco del diálogo
+        if(ccAutenticando) return;
         if(st.isActive){
           ccReprogramarNativo().then(()=>renderEstadosAlarmas());
           // si estaba bloqueada y volvió del fondo, pide huella otra vez
