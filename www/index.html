@@ -91,15 +91,16 @@
 
   .period{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
   .mes-select{
-    background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.28);
-    color:#fff; border-radius:11px; padding:8px 12px;
+    background-color:#0A6B50; border:1px solid rgba(255,255,255,.28);
+    color:#fff !important; border-radius:11px; padding:8px 12px;
     font-family:var(--font-body); font-size:13px; font-weight:600;
     appearance:none; -webkit-appearance:none; text-align:center; min-width:88px;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
     background-repeat:no-repeat; background-position:right 8px center; padding-right:26px;
   }
+  .mes-select:focus{ background-color:#0A6B50; color:#fff !important; }
   /* El menú desplegable del sistema: siempre texto oscuro sobre blanco (legible) */
-  .mes-select option{color:#111; background:#fff;}
+  .mes-select option{color:#111 !important; background:#fff !important;}
 
   /* ---------- MAIN ---------- */
   main{flex:1; overflow-y:auto; padding:18px 16px 108px; -webkit-overflow-scrolling:touch;}
@@ -357,11 +358,11 @@
     border-top:1px solid var(--line);
   }
   nav.bottomnav button{
-    flex:1; background:transparent; display:flex; flex-direction:column; align-items:center; gap:3px;
-    color:var(--ink-mute); padding:6px 2px; border-radius:12px; font-weight:600;
+    flex:1; min-width:0; background:transparent; display:flex; flex-direction:column; align-items:center; gap:3px;
+    color:var(--ink-mute); padding:6px 1px; border-radius:12px; font-weight:600;
   }
-  nav.bottomnav button svg{width:21px; height:21px;}
-  nav.bottomnav button span{font-size:9.5px; letter-spacing:.1px;}
+  nav.bottomnav button svg{width:21px; height:21px; flex-shrink:0;}
+  nav.bottomnav button span{font-size:9px; letter-spacing:0; white-space:nowrap; max-width:100%;}
   nav.bottomnav button.active{color:var(--brand-dark); background:var(--brand-soft);}
 
   .toast{
@@ -2796,7 +2797,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "3.8";
+const APP_VERSION = "3.9";
 
 /* =====================================================================
    CONTACTO Y APOYO
