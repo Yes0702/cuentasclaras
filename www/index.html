@@ -654,11 +654,11 @@
         <div id="chartGastos"></div>
       </div>
 
-      <h2 class="section-title">Historial<div class="rule"></div></h2>
+      <h2 class="section-title">Historial de <span id="histMesLabel"></span><div class="rule"></div></h2>
       <div class="filter-row">
-        <select id="filtroAnio"></select>
-        <select id="filtroMes"></select>
         <select id="filtroRubro"><option value="Todos">Todos los rubros</option></select>
+        <select id="filtroAnio" style="display:none;"></select>
+        <select id="filtroMes" style="display:none;"></select>
       </div>
       <div id="gastosList"></div>
 
@@ -2139,9 +2139,15 @@ function renderGastos(){
   if(ccSyncFiltroPendiente){ sincronizarFiltrosGastos(); ccSyncFiltroPendiente = false; }
   if(verGastosFijos) renderGastosFijos();
 
-  const anioF = document.getElementById("filtroAnio").value || "Todos";
-  const mesF  = document.getElementById("filtroMes").value || "Todos";
+  // El mes y año los manda SIEMPRE el selector de arriba (los filtros ocultos se sincronizan)
+  const anioF = String(state.anioActivo);
+  const mesF  = state.mesActivo;
   const rubF  = document.getElementById("filtroRubro").value || "Todos";
+  // Mantener los selects ocultos sincronizados por si algo los lee
+  const _fa=document.getElementById("filtroAnio"); if(_fa) _fa.value=anioF;
+  const _fm=document.getElementById("filtroMes"); if(_fm) _fm.value=mesF;
+  // Etiqueta del mes en el título del historial
+  const _hl=document.getElementById("histMesLabel"); if(_hl) _hl.textContent = state.mesActivo+" "+state.anioActivo;
 
   let list = state.gastos.slice().sort((a,b)=> (b.fecha||"").localeCompare(a.fecha||""));
   if(anioF!=="Todos") list = list.filter(g=>String(g.anio)===anioF);
@@ -3210,7 +3216,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "5.0";
+const APP_VERSION = "5.1";
 
 /* =====================================================================
    CONTACTO Y APOYO
