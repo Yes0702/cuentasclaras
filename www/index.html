@@ -724,7 +724,12 @@
         <input type="date" id="mFecha" onchange="onFechaMetaChange()">
         <label>¿En cuántos meses la quieres lograr? (se calcula solo con la fecha, o cámbialo tú)</label>
         <input type="number" min="1" id="mMeses" class="mono-input" placeholder="Ej: 4" oninput="actualizarHintMeta()">
+        <label>% anual de interés (opcional)</label>
+        <input type="text" inputmode="decimal" id="mTasa" class="mono-input" placeholder="Ej: 10" oninput="actualizarHintMeta()">
         <div class="hint" id="metaAporteHint"></div>
+        <div id="metaRendBox" style="display:none; margin-top:10px; padding:11px 13px; background:var(--brand-soft); border:1px solid #BFE9DA; border-radius:11px;">
+          <div style="font-size:12.5px; color:var(--brand-dark); font-weight:600; line-height:1.45;" id="metaRendTxt"></div>
+        </div>
         <button class="btn-primary" onclick="addMeta()">Agregar meta</button>
       </div>
 
@@ -2562,11 +2567,14 @@ function addMeta(){
   const ahorrado = numFromMasked("mAhorrado");
   const fecha = document.getElementById("mFecha").value;
   const mesesObjetivo = parseInt(document.getElementById("mMeses").value)||0;
+  const tasaEl = document.getElementById("mTasa");
+  const tasaAnual = tasaEl ? (parseFloat(String(tasaEl.value).replace(",","."))||0) : 0;
   if(!nombre || objetivo<=0){ toast("Completa el nombre y el monto objetivo."); return; }
   const aporteMensual = calcularAporteMeta(objetivo, ahorrado, mesesObjetivo).mensual;
-  state.metas.push({id:uid(), nombre, objetivo, ahorrado, fecha, mesesObjetivo, aporteMensual});
-  ["mNombre","mObjetivo","mAhorrado","mFecha","mMeses"].forEach(id=>document.getElementById(id).value="");
+  state.metas.push({id:uid(), nombre, objetivo, ahorrado, fecha, mesesObjetivo, aporteMensual, tasaAnual});
+  ["mNombre","mObjetivo","mAhorrado","mFecha","mMeses","mTasa"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("metaAporteHint").textContent = "";
+  ocultarRendMeta();
   saveState();
   renderAhorros();
   renderDashboard();
@@ -2611,9 +2619,54 @@ function actualizarHintMeta(){
   const obj = numFromMasked("mObjetivo");
   const ahorrado = numFromMasked("mAhorrado");
   const meses = parseInt(document.getElementById("mMeses").value)||0;
-  if(obj<=0 || meses<=0){ hint.textContent = ""; return; }
+  const tasaEl = document.getElementById("mTasa");
+  const tasa = tasaEl ? (parseFloat(String(tasaEl.value).replace(",","."))||0) : 0;
+  if(obj<=0 || meses<=0){ hint.textContent = ""; ocultarRendMeta(); return; }
   const r = calcularAporteMeta(obj, ahorrado, meses);
   hint.textContent = r.lograda ? "¡Ya la lograste!" : `Debes ahorrar ${money(r.mensual)} al mes para lograrlo en ${meses} mes${meses===1?"":"es"}.`;
+  // Recuadros de interés
+  mostrarRendMeta(obj, ahorrado, meses, tasa, r.mensual);
+}
+
+/* Interés compuesto mensual sobre los aportes.
+   Devuelve: rendimiento total estimado y en cuántos meses se llega
+   a la meta manteniendo el mismo aporte (llegando antes por los intereses). */
+function calcularInteresMeta(objetivo, ahorrado, mensual, tasaAnual){
+  const iMensual = (tasaAnual/100)/12;
+  if(iMensual<=0 || mensual<=0) return null;
+  // Simula mes a mes hasta alcanzar el objetivo (máx 600 meses de seguridad)
+  let saldo = ahorrado;
+  let aportado = ahorrado;
+  let mesesLogro = 0;
+  for(let m=1; m<=600; m++){
+    saldo = saldo*(1+iMensual) + mensual;   // rinde lo acumulado + aporte del mes
+    aportado += mensual;
+    if(saldo >= objetivo){ mesesLogro = m; break; }
+  }
+  if(mesesLogro===0) return null;
+  const rendimiento = Math.max(0, Math.round(saldo - aportado));
+  return { mesesLogro, rendimiento, saldoFinal: Math.round(saldo) };
+}
+
+function ocultarRendMeta(){
+  const box = document.getElementById("metaRendBox");
+  if(box) box.style.display = "none";
+}
+function mostrarRendMeta(obj, ahorrado, meses, tasa, mensual){
+  const box = document.getElementById("metaRendBox");
+  const txt = document.getElementById("metaRendTxt");
+  if(!box || !txt) return;
+  if(tasa<=0 || mensual<=0){ box.style.display="none"; return; }
+  const calc = calcularInteresMeta(obj, ahorrado, mensual, tasa);
+  if(!calc){ box.style.display="none"; return; }
+  let msg = "";
+  if(calc.mesesLogro < meses){
+    const adelanto = meses - calc.mesesLogro;
+    msg += `🚀 Con ${tasa}% anual llegarías en <b>${calc.mesesLogro} mes${calc.mesesLogro===1?"":"es"}</b> en vez de ${meses} — te adelantas ${adelanto} mes${adelanto===1?"":"es"} gracias a los rendimientos.<br>`;
+  }
+  msg += `💰 Tu dinero generaría <b>${money(calc.rendimiento)}</b> en rendimientos (aproximado).`;
+  txt.innerHTML = msg;
+  box.style.display = "block";
 }
 function actualizarHintMetaEdit(id){
   const hint = document.getElementById("metaAporteHintEdit_"+id);
@@ -2811,6 +2864,15 @@ function renderAhorros(){
           ? `<div class="hint" style="color:var(--brand-dark); font-weight:700; margin-bottom:8px;">¡Meta lograda!</div>`
           : `<div class="hint" style="margin-bottom:8px;">Aportando <b>${money(aporte.mensual)}</b>/mes, te faltan <b>${aporte.mesesRestantes} mes${aporte.mesesRestantes===1?"":"es"}</b> para lograrla.</div>`
         ) : ""}
+      ${(m.tasaAnual>0 && aporte && !aporte.lograda) ? (()=>{
+          const c = calcularInteresMeta(m.objetivo, m.ahorrado, aporte.mensual, m.tasaAnual);
+          if(!c) return "";
+          return `<div style="margin-bottom:10px; padding:9px 11px; background:var(--brand-soft); border:1px solid #BFE9DA; border-radius:10px;">
+            <div class="hint" style="color:var(--brand-dark); font-weight:600; line-height:1.4;">
+              💰 Con ${m.tasaAnual}% anual generarías <b>${money(c.rendimiento)}</b> en rendimientos (aprox.).
+            </div>
+          </div>`;
+        })() : ""}
       ${abonandoMetaId===m.id
         ? `<div onclick="event.stopPropagation();">
              <input type="text" inputmode="numeric" id="abonoMetaInput_${m.id}" class="mono-input" placeholder="Monto a agregar" style="margin-bottom:8px;">
@@ -2896,7 +2958,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "4.3";
+const APP_VERSION = "4.4";
 
 /* =====================================================================
    CONTACTO Y APOYO
