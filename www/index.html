@@ -274,6 +274,11 @@
     padding:6px 8px; border-radius:8px; cursor:pointer; transition:background .15s; flex-shrink:0;
   }
   .r-edit:active{ background:var(--brand-soft); }
+  .grupo-ing{ background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .grupo-ing-head{ display:flex; justify-content:space-between; align-items:center; cursor:pointer; gap:10px; }
+  .grupo-ing-head .s-txt{ font-size:14px; font-weight:700; }
+  .grupo-ing-head .s-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:1px; }
+  .grupo-ing .chev{ color:var(--ink-mute); font-size:11px; }
   .r-del{
     background:transparent; border:none; color:var(--red); font-size:19px; line-height:1;
     padding:6px 9px; border-radius:8px; cursor:pointer; transition:background .15s;
@@ -528,16 +533,17 @@
         </div>
         <div id="avisoIngresoEjemplo" style="display:none; margin-top:10px; padding:11px 13px; background:#FFF7E6; border:1px solid #F0D48A; border-radius:11px;">
           <div style="font-size:12.5px; color:#8A6D1F; font-weight:600; line-height:1.4;">
-            ✏️ Este es un valor de ejemplo. Toca el monto y cámbialo por tu ingreso real.
+            ✏️ El ingreso principal es un valor de ejemplo. Despliégalo abajo y cámbialo por tu ingreso real.
           </div>
         </div>
         <div id="ingresosList" style="margin-top:10px;"></div>
-        <button class="add-row-btn" onclick="toggleAddIngreso()" style="margin-top:4px;">+ Agregar ingreso</button>
+        <button class="add-row-btn" onclick="toggleAddIngreso()" style="margin-top:10px;">+ Agregar ingreso ocasional</button>
         <div class="edit-panel" id="addIngresoPanel" style="display:none; margin-top:10px;">
           <label>Descripción</label>
-          <input type="text" id="newIngresoNombre" placeholder="Ej: Quincena 1, Sueldo, Freelance">
+          <input type="text" id="newIngresoNombre" placeholder="Ej: Carrera del lunes, Comisión, Domicilio">
           <label>Monto</label>
           <input type="text" inputmode="numeric" id="newIngresoMonto" class="mono-input" placeholder="0">
+          <div class="hint" style="margin-top:6px;">Se guardará en <b id="addIngMesLabel"></b>.</div>
           <div class="edit-actions">
             <button class="btn-primary" style="margin:0;" onclick="addIngreso()">Guardar ingreso</button>
             <button class="btn-ghost" style="margin:0;" onclick="toggleAddIngreso()">Cancelar</button>
@@ -877,12 +883,10 @@ function normalizarAlarma(a){
 }
 
 function defaultState(){
-  const ingresos = [{ id: uid(), nombre: "Ingreso principal", monto: 3000000 }];
-  const ingreso = ingresos.reduce((s,i)=>s+i.monto,0);
   return {
-    version: 2,
-    ingreso,
-    ingresos,
+    version: 3,
+    ingresoPrincipal: { monto: 3000000, esEjemplo: true },
+    ingresosOcasionales: [],   // cada uno: {id, nombre, monto, mes, anio}
     rubros: RUBROS_DEFAULT.map(r=>({
       nombre: r[0], tipo: r[1], prioridad: r[2],
       modo: r[1]==="Fijo" ? "valor" : "pct",
@@ -896,6 +900,19 @@ function defaultState(){
     anioActivo: ANIO_HOY,
     alarmas: [nuevaAlarma("Recordatorio")]
   };
+}
+
+/* Ingreso total del mes activo = principal (fijo) + ocasionales de ese mes */
+function ingresoDelMes(){
+  const p = (state.ingresoPrincipal && state.ingresoPrincipal.monto) || 0;
+  const oc = (state.ingresosOcasionales||[])
+    .filter(i=> i.mes===state.mesActivo && i.anio===state.anioActivo)
+    .reduce((s,i)=> s + (i.monto||0), 0);
+  return p + oc;
+}
+function ocasionalesDelMes(){
+  return (state.ingresosOcasionales||[])
+    .filter(i=> i.mes===state.mesActivo && i.anio===state.anioActivo);
 }
 
 /* Convierte el modelo viejo (todo en % del ingreso) al nuevo:
@@ -966,10 +983,38 @@ function loadState(){
 
 function hidratar(parsed, base){
   const s = Object.assign({}, base, parsed);
-  s.ingresos = Array.isArray(s.ingresos) && s.ingresos.length
-    ? s.ingresos.map(normalizarIngreso)
-    : [{ id: uid(), nombre: "Ingreso principal", monto: Number(s.ingreso)||0 }];
-  s.ingreso = s.ingresos.reduce((sum,i)=> sum + (i.monto||0), 0);
+
+  // --- Migración de ingresos a la estructura nueva (v3) ---
+  if(!s.ingresoPrincipal){
+    // Venimos de la estructura vieja (lista s.ingresos o s.ingreso suelto)
+    let montoPrincipal = 0;
+    let ocasionales = [];
+    if(Array.isArray(parsed.ingresos) && parsed.ingresos.length){
+      // El primero (o el llamado "Ingreso principal") pasa a principal; el resto a ocasionales del mes actual
+      const lista = parsed.ingresos.map(normalizarIngreso);
+      const idxPrin = Math.max(0, lista.findIndex(i=> (i.nombre||"").toLowerCase().includes("principal")));
+      montoPrincipal = lista[idxPrin] ? lista[idxPrin].monto : lista[0].monto;
+      const mesA = parsed.mesActivo || base.mesActivo;
+      const anioA = parsed.anioActivo || base.anioActivo;
+      lista.forEach((i,k)=>{
+        if(k===idxPrin) return;
+        ocasionales.push({ id: uid(), nombre: i.nombre||"Ingreso", monto: i.monto||0, mes: mesA, anio: anioA });
+      });
+    } else {
+      montoPrincipal = Number(parsed.ingreso)||0;
+    }
+    s.ingresoPrincipal = { monto: montoPrincipal, esEjemplo: false };
+    s.ingresosOcasionales = ocasionales;
+  }
+  if(!s.ingresoPrincipal) s.ingresoPrincipal = { monto: 0, esEjemplo: false };
+  if(!Array.isArray(s.ingresosOcasionales)) s.ingresosOcasionales = [];
+  delete s.ingresos; // ya no se usa la lista vieja
+
+  // ingreso total = principal + ocasionales del mes activo (se recalcula donde se use)
+  s.ingreso = (s.ingresoPrincipal.monto||0) + s.ingresosOcasionales
+    .filter(i=> i.mes===s.mesActivo && i.anio===s.anioActivo)
+    .reduce((sum,i)=> sum + (i.monto||0), 0);
+
   s.rubros = (Array.isArray(s.rubros) && s.rubros.length ? s.rubros : base.rubros).map(r=>normalizarRubro(r, s.ingreso));
   s.gastos = (s.gastos||[]).map(normalizarGasto);
   s.deudas = (s.deudas||[]).map(d=>{
@@ -994,7 +1039,7 @@ function hidratar(parsed, base){
   delete s.alarma;
   s.anioActivo = Number(s.anioActivo)||ANIO_HOY;
   if(!MESES.includes(s.mesActivo)) s.mesActivo = MESES[new Date().getMonth()];
-  s.version = 2;
+  s.version = 3;
   return s;
 }
 
@@ -1446,8 +1491,29 @@ let editingRubroIdx = null;
 let editingIngresoId = null;
 
 function recalcularIngreso(){
-  state.ingreso = state.ingresos.reduce((s,i)=> s + (i.monto||0), 0);
+  state.ingreso = ingresoDelMes();
 }
+
+/* --- Ingreso principal --- */
+let editandoPrincipal = false;
+function togglePrincipalEdit(){ editandoPrincipal = !editandoPrincipal; renderIngresos(); }
+function savePrincipal(){
+  const monto = numFromMasked("edPrincipalMonto");
+  if(monto<0){ toast("El monto no puede ser negativo."); return; }
+  state.ingresoPrincipal.monto = monto;
+  state.ingresoPrincipal.esEjemplo = false;   // ya lo tocó, deja de ser ejemplo
+  editandoPrincipal = false;
+  recalcularIngreso();
+  saveState(); renderAll();
+  toast("Ingreso principal actualizado");
+}
+
+/* --- Ingresos ocasionales (por mes) --- */
+let mostrarOcasionales = false;
+let mostrarPrincipalBloque = false;
+function toggleVerOcasionales(){ mostrarOcasionales = !mostrarOcasionales; renderIngresos(); }
+function toggleVerPrincipal(){ mostrarPrincipalBloque = !mostrarPrincipalBloque; renderIngresos(); }
+
 function toggleAddIngreso(){
   const panel = document.getElementById("addIngresoPanel");
   panel.style.display = panel.style.display==="none" ? "block" : "none";
@@ -1455,86 +1521,137 @@ function toggleAddIngreso(){
 function addIngreso(){
   const nombre = document.getElementById("newIngresoNombre").value.trim();
   const monto = numFromMasked("newIngresoMonto");
-  if(!nombre){ toast("Ponle un nombre a este ingreso (ej. Quincena 1)."); return; }
+  if(!nombre){ toast("Ponle un nombre (ej. Carrera del lunes, Comisión)."); return; }
   if(monto<=0){ toast("El monto debe ser mayor a cero."); return; }
-  state.ingresos.push({ id: uid(), nombre, monto });
+  state.ingresosOcasionales.push({
+    id: uid(), nombre, monto,
+    mes: state.mesActivo, anio: state.anioActivo
+  });
   recalcularIngreso();
   document.getElementById("newIngresoNombre").value = "";
   document.getElementById("newIngresoMonto").value = "";
   document.getElementById("addIngresoPanel").style.display = "none";
-  saveState();
-  renderAll();
-  toast("Ingreso agregado");
+  mostrarOcasionales = true;
+  saveState(); renderAll();
+  toast("Ingreso agregado a "+state.mesActivo);
 }
 function openIngresoEdit(id){ editingIngresoId = id; renderIngresos(); }
 function closeIngresoEdit(){ editingIngresoId = null; renderIngresos(); }
 function saveIngresoEdit(id){
-  const it = state.ingresos.find(x=>x.id===id);
+  const it = state.ingresosOcasionales.find(x=>x.id===id);
   if(!it) return;
   const nombre = document.getElementById("edIngN_"+id).value.trim();
   const monto = numFromMasked("edIngM_"+id);
   if(!nombre){ toast("Ponle un nombre a este ingreso."); return; }
-  it.nombre = nombre;
-  it.monto = monto;
+  it.nombre = nombre; it.monto = monto;
   recalcularIngreso();
   editingIngresoId = null;
-  saveState();
-  renderAll();
+  saveState(); renderAll();
   toast("Ingreso actualizado");
 }
 function deleteIngreso(id){
-  if(state.ingresos.length<=1){ toast("Debes tener al menos una fuente de ingreso."); return; }
-  limpiarPendiente("ing:"+id);
-  state.ingresos = state.ingresos.filter(i=>i.id!==id);
+  state.ingresosOcasionales = state.ingresosOcasionales.filter(i=>i.id!==id);
   recalcularIngreso();
   editingIngresoId = null;
-  saveState();
-  renderAll();
+  saveState(); renderAll();
   toast("Ingreso eliminado");
 }
+
 function renderIngresos(){
+  recalcularIngreso();
   const totalEl = document.getElementById("ingresoTotalDisplay");
   if(totalEl) totalEl.textContent = money(state.ingreso);
   const box = document.getElementById("ingresosList");
   if(!box) return;
-  if(state.ingresos.length===0){
-    box.innerHTML = `<div class="empty-state">No tienes ingresos registrados. Agrega el primero abajo.</div>`;
-    return;
-  }
-  box.innerHTML = state.ingresos.map(i=>{
-    if(editingIngresoId===i.id){
-      return `<div class="edit-panel">
-        <label>Descripción</label>
-        <input type="text" id="edIngN_${i.id}" value="${esc(i.nombre)}">
-        <label>Monto</label>
-        <input type="text" inputmode="numeric" id="edIngM_${i.id}" class="mono-input" value="${i.monto.toLocaleString("es-CO")}">
-        <div class="edit-actions">
-          <button class="btn-primary" style="margin:0;" onclick="saveIngresoEdit('${i.id}')">Guardar</button>
-          <button class="btn-danger" style="margin:0; flex:0 0 auto;" onclick="deleteIngreso('${i.id}')">Eliminar</button>
-          <button class="btn-ghost" style="margin:0;" onclick="closeIngresoEdit()">Cerrar</button>
+
+  const p = state.ingresoPrincipal || {monto:0};
+  const ocas = ocasionalesDelMes();
+  const totalOcas = ocas.reduce((s,i)=>s+(i.monto||0),0);
+
+  // ---- Bloque Ingreso Principal (colapsable) ----
+  let html = `
+    <div class="grupo-ing">
+      <div class="grupo-ing-head" onclick="toggleVerPrincipal()">
+        <div>
+          <div class="s-txt">Ingreso principal</div>
+          <div class="s-sub">Fijo todos los meses</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="r-amount" style="color:var(--brand-dark);">${money(p.monto||0)}</span>
+          <span class="chev">${mostrarPrincipalBloque?"▲":"▼"}</span>
         </div>
       </div>`;
+  if(mostrarPrincipalBloque){
+    if(editandoPrincipal){
+      html += `<div class="edit-panel" style="margin-top:8px;">
+        <label>Monto del ingreso principal</label>
+        <input type="text" inputmode="numeric" id="edPrincipalMonto" class="mono-input" value="${(p.monto||0).toLocaleString('es-CO')}">
+        <div class="edit-actions">
+          <button class="btn-primary" style="margin:0;" onclick="savePrincipal()">Guardar</button>
+          <button class="btn-ghost" style="margin:0;" onclick="togglePrincipalEdit()">Cancelar</button>
+        </div>
+      </div>`;
+    } else {
+      html += `<div style="padding:8px 2px;">
+        <button class="btn-outline" style="width:100%;" onclick="togglePrincipalEdit()">✎ Cambiar ingreso principal</button>
+      </div>`;
     }
-    return `<div class="receipt" onclick="openIngresoEdit('${i.id}')" style="cursor:pointer;">
-      <div class="r-main"><div class="r-rubro">${esc(i.nombre)}</div></div>
-      <div class="r-amount" style="color:var(--brand-dark);">${money(i.monto)}</div>
-      ${esPendiente("ing:"+i.id)
-        ? `<button class="r-del confirm" onclick="event.stopPropagation(); deleteIngreso('${i.id}')">✓ Eliminar</button>`
-        : `<button class="r-del" onclick="event.stopPropagation(); pideConfirmar('ing:${i.id}', renderIngresos)" aria-label="Eliminar">×</button>`}
-    </div>`;
-  }).join("");
-  state.ingresos.forEach(i=>{
-    const el = document.getElementById("edIngM_"+i.id);
-    if(el) maskMiles(el);
-  });
-  // Aviso "es un ejemplo": solo si sigue el ingreso predeterminado sin tocar
+  }
+  html += `</div>`;
+
+  // ---- Bloque Ingresos Ocasionales del mes (colapsable) ----
+  html += `
+    <div class="grupo-ing" style="margin-top:10px;">
+      <div class="grupo-ing-head" onclick="toggleVerOcasionales()">
+        <div>
+          <div class="s-txt">Ingresos ocasionales de ${state.mesActivo}</div>
+          <div class="s-sub">${ocas.length} este mes</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="r-amount" style="color:var(--brand-dark);">${money(totalOcas)}</span>
+          <span class="chev">${mostrarOcasionales?"▲":"▼"}</span>
+        </div>
+      </div>`;
+  if(mostrarOcasionales){
+    if(ocas.length===0){
+      html += `<div class="empty-state" style="margin-top:8px;">No hay ingresos ocasionales en ${state.mesActivo}. Agrégalos con el botón de abajo.</div>`;
+    } else {
+      html += ocas.map(i=>{
+        if(editingIngresoId===i.id){
+          return `<div class="edit-panel" style="margin-top:8px;">
+            <label>Descripción</label>
+            <input type="text" id="edIngN_${i.id}" value="${esc(i.nombre)}">
+            <label>Monto</label>
+            <input type="text" inputmode="numeric" id="edIngM_${i.id}" class="mono-input" value="${i.monto.toLocaleString('es-CO')}">
+            <div class="edit-actions">
+              <button class="btn-primary" style="margin:0;" onclick="saveIngresoEdit('${i.id}')">Guardar</button>
+              <button class="btn-danger" style="margin:0; flex:0 0 auto;" onclick="deleteIngreso('${i.id}')">Eliminar</button>
+              <button class="btn-ghost" style="margin:0;" onclick="closeIngresoEdit()">Cerrar</button>
+            </div>
+          </div>`;
+        }
+        return `<div class="receipt" style="margin-top:8px;" onclick="openIngresoEdit('${i.id}')">
+          <div class="r-main"><div class="r-rubro">${esc(i.nombre)}</div></div>
+          <div class="r-amount" style="color:var(--brand-dark);">${money(i.monto)}</div>
+          <button class="r-edit" onclick="event.stopPropagation(); openIngresoEdit('${i.id}')" aria-label="Editar">✎</button>
+        </div>`;
+      }).join("");
+    }
+  }
+  html += `</div>`;
+
+  box.innerHTML = html;
+
+  if(editandoPrincipal){ const el=document.getElementById("edPrincipalMonto"); if(el) maskMiles(el); }
+  ocas.forEach(i=>{ const el=document.getElementById("edIngM_"+i.id); if(el) maskMiles(el); });
+
+  // Aviso "es un ejemplo": solo si el principal sigue siendo el predeterminado
   const aviso = document.getElementById("avisoIngresoEjemplo");
   if(aviso){
-    const esEjemplo = state.ingresos.length===1
-      && state.ingresos[0].nombre==="Ingreso principal"
-      && state.ingresos[0].monto===3000000;
-    aviso.style.display = esEjemplo ? "block" : "none";
+    aviso.style.display = (state.ingresoPrincipal && state.ingresoPrincipal.esEjemplo) ? "block" : "none";
   }
+  const mesLbl = document.getElementById("addIngMesLabel");
+  if(mesLbl) mesLbl.textContent = state.mesActivo + " " + state.anioActivo;
 }
 
 function renderPresupuesto(){
@@ -2967,7 +3084,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "4.6";
+const APP_VERSION = "4.7";
 
 /* =====================================================================
    CONTACTO Y APOYO
@@ -3647,6 +3764,7 @@ function cerrarRecordatorio(){
    INIT
    ===================================================================== */
 function renderAll(){
+  recalcularIngreso();
   renderTopbar();
   renderDashboard();
   renderPresupuesto();
