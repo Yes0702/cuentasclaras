@@ -1217,6 +1217,7 @@ function renderTopbar(){
         state.anioActivo = Number(e.target.value);
         chartState.inicio.pick = null;
         chartState.gastos.pick = null;
+        ccSyncFiltroPendiente = true;
         saveState(); renderAll();
       });
     }
@@ -1226,9 +1227,18 @@ function renderTopbar(){
   if(!sel.dataset.filled){
     sel.innerHTML = MESES.map(m=>`<option value="${m}">${m}</option>`).join("");
     sel.dataset.filled = "1";
-    sel.addEventListener("change", e=>{ state.mesActivo = e.target.value; saveState(); renderAll(); });
+    sel.addEventListener("change", e=>{ state.mesActivo = e.target.value; ccSyncFiltroPendiente = true; saveState(); renderAll(); });
   }
   sel.value = state.mesActivo;
+}
+
+/* Bandera: cuando cambias el mes/año de arriba, la lista de gastos salta a ese mes (Opción B) */
+let ccSyncFiltroPendiente = false;
+function sincronizarFiltrosGastos(){
+  const fMes = document.getElementById("filtroMes");
+  const fAnio = document.getElementById("filtroAnio");
+  if(fMes) fMes.value = state.mesActivo;
+  if(fAnio) fAnio.value = String(state.anioActivo);
 }
 
 /* =====================================================================
@@ -1952,16 +1962,20 @@ function normalizarPct(){
    RENDER: GASTOS
    ===================================================================== */
 function fillRubroSelects(){
-  const opts = state.rubros.slice().sort((a,b)=>a.prioridad-b.prioridad)
-    .map(r=>`<option value="${esc(r.nombre)}">${esc(r.nombre)}</option>`).join("");
+  // Selector de gasto MANUAL: excluye los rubros Fijos (esos van solo por interruptor)
+  const noFijos = state.rubros.filter(r=>r.tipo!=="Fijo").sort((a,b)=>a.prioridad-b.prioridad);
+  const optsManual = noFijos.map(r=>`<option value="${esc(r.nombre)}">${esc(r.nombre)}</option>`).join("");
   const gR = document.getElementById("gRubro");
   const prevG = gR.value;
-  gR.innerHTML = opts;
-  if(prevG && state.rubros.some(r=>r.nombre===prevG)) gR.value = prevG;
+  gR.innerHTML = optsManual || `<option value="">(crea rubros variables en Presupuesto)</option>`;
+  if(prevG && noFijos.some(r=>r.nombre===prevG)) gR.value = prevG;
 
+  // Filtro de la lista: muestra TODOS (para poder ver también los fijos registrados)
+  const optsTodos = state.rubros.slice().sort((a,b)=>a.prioridad-b.prioridad)
+    .map(r=>`<option value="${esc(r.nombre)}">${esc(r.nombre)}</option>`).join("");
   const fR = document.getElementById("filtroRubro");
   const prevF = fR.value || "Todos";
-  fR.innerHTML = `<option value="Todos">Todos los rubros</option>` + opts;
+  fR.innerHTML = `<option value="Todos">Todos los rubros</option>` + optsTodos;
   fR.value = (prevF==="Todos" || state.rubros.some(r=>r.nombre===prevF)) ? prevF : "Todos";
 }
 
@@ -2122,6 +2136,7 @@ function toggleGastoFijo(nombreRubro){
 function renderGastos(){
   fillRubroSelects();
   fillMesAnioSelects();
+  if(ccSyncFiltroPendiente){ sincronizarFiltrosGastos(); ccSyncFiltroPendiente = false; }
   if(verGastosFijos) renderGastosFijos();
 
   const anioF = document.getElementById("filtroAnio").value || "Todos";
@@ -3195,7 +3210,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "4.9";
+const APP_VERSION = "5.0";
 
 /* =====================================================================
    CONTACTO Y APOYO
