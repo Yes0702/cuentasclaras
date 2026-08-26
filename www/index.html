@@ -822,6 +822,7 @@
       <h2 class="section-title">Acerca de<div class="rule"></div></h2>
       <div class="card">
         <div class="hint">Cuentas Claras <span id="ccVerAcerca"></span>· Todo se guarda solo en este dispositivo. Exporta un respaldo de vez en cuando para no perder tu historial.</div>
+        <button class="btn-outline" style="width:100%; margin-top:12px;" onclick="ccChequearActualizacion(true)">🔄 Buscar actualización</button>
       </div>
     </section>
 
@@ -3220,7 +3221,7 @@ const CONFIG = {
   // Déjalo en "" para desactivar el aviso de actualización.
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "5.2";
+const APP_VERSION = "5.3";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -3238,19 +3239,21 @@ function ccCompararVersiones(a, b){
   return 0;
 }
 
-async function ccChequearActualizacion(){
-  if(!CONFIG.urlVersion) return;
+async function ccChequearActualizacion(manual){
+  if(!CONFIG.urlVersion){ if(manual) toast("Chequeo de versión no configurado."); return; }
   try{
-    // cache-buster para que no lea una versión vieja guardada
-    const url = CONFIG.urlVersion + (CONFIG.urlVersion.includes("?")?"&":"?") + "t=" + Date.now();
-    const resp = await fetch(url, { cache: "no-store" });
-    if(!resp.ok) return;
+    const resp = await fetch(CONFIG.urlVersion, { cache: "no-store" });
+    if(!resp.ok){ if(manual) toast("No se pudo consultar (código "+resp.status+")."); return; }
     const info = await resp.json();
-    if(!info || !info.version) return;
+    if(!info || !info.version){ if(manual) toast("Respuesta sin versión."); return; }
     if(ccCompararVersiones(info.version, APP_VERSION) === 1){
       mostrarAvisoActualizacion(info);
+    } else {
+      if(manual) toast("Ya tienes la última versión ("+APP_VERSION+").");
     }
-  }catch(e){ /* sin internet o error: no molestar */ }
+  }catch(e){
+    if(manual) toast("Sin conexión o error al consultar.");
+  }
 }
 
 function mostrarAvisoActualizacion(info){
