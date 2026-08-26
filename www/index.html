@@ -279,6 +279,14 @@
   .grupo-ing-head .s-txt{ font-size:14px; font-weight:700; }
   .grupo-ing-head .s-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:1px; }
   .grupo-ing .chev{ color:var(--ink-mute); font-size:11px; }
+  .fijo-row{
+    display:flex; align-items:center; gap:10px; padding:11px 12px; margin-bottom:8px;
+    background:var(--surface-2); border:1px solid var(--line); border-radius:11px;
+    transition:background .2s, border-color .2s;
+  }
+  .fijo-row.pagado{ background:var(--brand-soft); border-color:#BFE9DA; }
+  .fijo-row .s-txt{ font-size:13.5px; font-weight:700; }
+  .fijo-row .s-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
   .r-del{
     background:transparent; border:none; color:var(--red); font-size:19px; line-height:1;
     padding:6px 9px; border-radius:8px; cursor:pointer; transition:background .15s;
@@ -625,6 +633,17 @@
           <div><label>Nota (opcional)</label><input type="text" id="gNota" placeholder="Ej: compra semanal"></div>
         </div>
         <button class="btn-primary" onclick="addGasto()">Agregar gasto</button>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div class="grupo-ing-head" onclick="toggleVerGastosFijos()" style="cursor:pointer;">
+          <div>
+            <div class="s-txt">⚡ Marcar gastos fijos como pagados</div>
+            <div class="s-sub">Actívalos y se registran solos con su valor</div>
+          </div>
+          <span class="chev" id="chevGastosFijos">▼</span>
+        </div>
+        <div id="gastosFijosList" style="display:none; margin-top:10px;"></div>
       </div>
 
       <h2 class="section-title">Comparativo por rubro<div class="rule"></div></h2>
@@ -2009,9 +2028,101 @@ function deleteGasto(id){
   renderDashboard();
 }
 
+/* ===== Gastos fijos con interruptor (por mes) ===== */
+let verGastosFijos = false;
+function toggleVerGastosFijos(){
+  verGastosFijos = !verGastosFijos;
+  const box = document.getElementById("gastosFijosList");
+  const chev = document.getElementById("chevGastosFijos");
+  if(box) box.style.display = verGastosFijos ? "block" : "none";
+  if(chev) chev.textContent = verGastosFijos ? "▲" : "▼";
+  if(verGastosFijos) renderGastosFijos();
+}
+
+/* Busca si un rubro fijo ya está registrado como gasto en el mes activo */
+function gastoFijoDelMes(nombreRubro){
+  return state.gastos.find(g=>
+    g.origenFijo === nombreRubro &&
+    g.mes === state.mesActivo &&
+    g.anio === state.anioActivo
+  );
+}
+
+function renderGastosFijos(){
+  const box = document.getElementById("gastosFijosList");
+  if(!box) return;
+  const fijos = state.rubros.filter(r=>r.tipo==="Fijo").sort((a,b)=>a.prioridad-b.prioridad);
+  if(fijos.length===0){
+    box.innerHTML = `<div class="empty-state">No tienes rubros fijos. Créalos en Presupuesto.</div>`;
+    return;
+  }
+  const pagados = fijos.filter(r=>gastoFijoDelMes(r.nombre)).length;
+  box.innerHTML =
+    `<div style="padding:11px 13px; background:var(--brand-soft); border:1px solid #BFE9DA; border-radius:11px; margin-bottom:12px;">
+       <div style="font-size:12.5px; color:var(--brand-dark); font-weight:600; line-height:1.45;">
+         👇 Activa el interruptor de cada pago que ya hiciste este mes. El gasto se registra solo con su valor.
+       </div>
+     </div>` +
+    fijos.map(r=>{
+      const ya = gastoFijoDelMes(r.nombre);
+      const valor = montoRubro(r);
+      const activo = !!ya;
+      return `
+      <div class="fijo-row ${activo?"pagado":""}">
+        <div style="min-width:0; flex:1;">
+          <div class="s-txt">${esc(r.nombre)}</div>
+          <div class="s-sub" style="${activo?"color:var(--brand-dark); font-weight:600;":""}">
+            ${activo ? "✓ Pagado — "+money(ya.monto) : "Toca para registrar · "+money(valor)}
+          </div>
+        </div>
+        <button class="switch ${activo?"on":""}" style="flex:0 0 auto;"
+          onclick="toggleGastoFijo('${esc(r.nombre)}')" aria-label="Marcar pagado"></button>
+      </div>`;
+    }).join("") +
+    `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--line);">
+       <span class="s-sub">${pagados} de ${fijos.length} pagados en ${state.mesActivo}</span>
+     </div>
+     <div class="hint" style="margin-top:6px;">Si pagaste un valor distinto, edítalo en la lista de gastos de abajo.</div>`;
+}
+
+function toggleGastoFijo(nombreRubro){
+  const ya = gastoFijoDelMes(nombreRubro);
+  if(ya){
+    // Desactivar: pedir confirmación
+    if(confirm("¿Estás seguro? Esto cambia tus gastos y este pago dejará de estar registrado en "+state.mesActivo+".")){
+      state.gastos = state.gastos.filter(g=>g.id!==ya.id);
+      saveState();
+      renderGastosFijos();
+      renderGastos();
+      renderDashboard();
+      toast("Gasto fijo desmarcado");
+    }
+  }else{
+    // Activar: registrar el gasto con el valor del rubro
+    const r = state.rubros.find(x=>x.nombre===nombreRubro && x.tipo==="Fijo");
+    if(!r) return;
+    const valor = montoRubro(r);
+    if(valor<=0){ toast("Ese rubro no tiene valor asignado. Ponle un monto en Presupuesto."); return; }
+    const hoy = new Date();
+    const fecha = new Date(state.anioActivo, MESES.indexOf(state.mesActivo), Math.min(hoy.getDate(), 28))
+                    .toISOString().slice(0,10);
+    state.gastos.push({
+      id: uid(), fecha, mes: state.mesActivo, anio: state.anioActivo,
+      rubro: nombreRubro, monto: valor, nota: "Gasto fijo",
+      origenFijo: nombreRubro
+    });
+    saveState();
+    renderGastosFijos();
+    renderGastos();
+    renderDashboard();
+    toast(nombreRubro+" registrado ✓");
+  }
+}
+
 function renderGastos(){
   fillRubroSelects();
   fillMesAnioSelects();
+  if(verGastosFijos) renderGastosFijos();
 
   const anioF = document.getElementById("filtroAnio").value || "Todos";
   const mesF  = document.getElementById("filtroMes").value || "Todos";
@@ -3084,7 +3195,7 @@ const CONFIG = {
 
   mostrarDonacion: true         // pon false para esconder todo el bloque
 };
-const APP_VERSION = "4.7";
+const APP_VERSION = "4.9";
 
 /* =====================================================================
    CONTACTO Y APOYO
