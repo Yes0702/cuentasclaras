@@ -3412,7 +3412,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "6.1";
+const APP_VERSION = "6.2";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -3432,41 +3432,56 @@ function ccCompararVersiones(a, b){
 
 async function ccChequearActualizacion(manual){
   if(!CONFIG.apiVersion && !CONFIG.urlVersion){ if(manual) toast("Chequeo no configurado."); return; }
-  try{
-    let versionRemota = null;
-    let urlApk = CONFIG.urlVersion ? CONFIG.urlVersion.replace("version.json","CuentasClaras.apk") : "";
-    let novedades = "";
+  let versionRemota = null;
+  let urlApk = CONFIG.urlVersion ? CONFIG.urlVersion.replace("version.json","CuentasClaras.apk") : "";
+  let novedades = "";
+  let dondeErr = "";
 
-    // 1) Intentar con la API de GitHub (la más confiable, sin caché)
-    if(CONFIG.apiVersion){
-      try{
-        const r = await fetch(CONFIG.apiVersion, { cache:"reload", headers:{ "Accept":"application/vnd.github+json" } });
-        if(r.ok){
-          const rel = await r.json();
-          if(rel && rel.tag_name) versionRemota = rel.tag_name;   // ej "v5.7"
+  // 1) API de GitHub (la más confiable). Sin caché.
+  if(CONFIG.apiVersion){
+    try{
+      const r = await fetch(CONFIG.apiVersion + "?_=" + Date.now(), {
+        method: "GET",
+        headers: { "Accept":"application/vnd.github+json" }
+      });
+      if(r.ok){
+        const rel = await r.json();
+        if(rel && rel.tag_name){
+          versionRemota = String(rel.tag_name).replace(/^v/i,"");
+          if(rel.body) novedades = rel.body;
         }
-      }catch(e){}
-    }
+      } else { dondeErr = "API código "+r.status; }
+    }catch(e){ dondeErr = "API sin conexión"; }
+  }
 
-    // 2) Si la API no dio versión, intentar leer el version.json directo
-    if(!versionRemota && CONFIG.urlVersion){
-      const r2 = await fetch(CONFIG.urlVersion, { cache:"reload", headers:{ "Cache-Control":"no-cache" } });
+  // 2) Respaldo: version.json directo (para novedades y URL del APK)
+  if(CONFIG.urlVersion){
+    try{
+      const r2 = await fetch(CONFIG.urlVersion + "?_=" + Date.now(), {
+        method: "GET", headers: { "Cache-Control":"no-cache" }
+      });
       if(r2.ok){
         const info = await r2.json();
-        if(info && info.version){ versionRemota = info.version; urlApk = info.url || urlApk; novedades = info.novedades || ""; }
+        if(info){
+          if(!versionRemota && info.version) versionRemota = String(info.version).replace(/^v/i,"");
+          if(info.url) urlApk = info.url;
+          if(info.novedades) novedades = info.novedades;
+        }
       }
-    }
+    }catch(e){}
+  }
 
-    if(!versionRemota){ if(manual) toast("No se pudo consultar la versión."); return; }
+  if(!versionRemota){
+    if(manual) toast("No se pudo consultar" + (dondeErr ? " ("+dondeErr+")" : "") + ".");
+    return;
+  }
 
-    if(ccCompararVersiones(versionRemota, APP_VERSION) === 1){
-      mostrarAvisoActualizacion({ version: String(versionRemota).replace(/^v/i,""), url: urlApk, novedades });
-      if(manual) toast("¡Hay una nueva versión! ("+String(versionRemota).replace(/^v/i,"")+")");
-    } else {
-      if(manual) toast("Ya tienes la última versión ("+APP_VERSION+").");
-    }
-  }catch(e){
-    if(manual) toast("Sin conexión o error al consultar.");
+  const cmp = ccCompararVersiones(versionRemota, APP_VERSION);
+  if(cmp === 1){
+    mostrarAvisoActualizacion({ version: versionRemota, url: urlApk, novedades });
+    if(manual) toast("¡Nueva versión disponible! (" + versionRemota + ")");
+  } else {
+    if(manual) toast("Ya tienes la última (tú: "+APP_VERSION+" · última: "+versionRemota+")");
   }
 }
 
