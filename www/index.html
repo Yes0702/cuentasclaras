@@ -421,7 +421,8 @@
   <div style="font-size:64px; margin-bottom:14px;">🌱</div>
   <div style="font-size:26px; font-weight:800; margin-bottom:10px;">¡Bienvenido a<br>Cuentas Claras!</div>
   <div style="font-size:15px; opacity:.92; max-width:300px; line-height:1.55; margin-bottom:32px;">
-    Es momento de empezar a planear tus finanzas. Organiza tu presupuesto, controla tus gastos y alcanza tus metas.
+    Es momento de empezar a planear tus finanzas. Organiza tu presupuesto, controla tus gastos y alcanza tus metas.<br><br>
+    <b>Empezaremos por tus deudas</b>, así sabrás con cuánto cuentas realmente para repartir en tus rubros.
   </div>
   <button onclick="ccCerrarWelcome()"
     style="background:#fff; color:#0B7D5C; border:none; border-radius:14px;
@@ -3375,7 +3376,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "5.9";
+const APP_VERSION = "6.0";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -4325,8 +4326,10 @@ function ccIniciarNativo(){
     }
   }catch(e){}
 
-  ccPedirPermisoNativo()
-    .then(()=> ccReprogramarNativo())
+  // Al arrancar NO pedimos permiso de notificaciones (eso sería intrusivo).
+  // Solo reprogramamos las alarmas si el usuario YA dio permiso antes.
+  ccEstadoPermisoNativo()
+    .then(tienePermiso=>{ if(tienePermiso) return ccReprogramarNativo(); })
     .then(()=> renderEstadosAlarmas())
     .catch(()=>{});
 
