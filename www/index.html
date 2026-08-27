@@ -918,7 +918,7 @@ function defaultState(){
     gastos: [],
     deudas: [],
     metas: [],
-    fondoEmergencia: { meses:6, ahorrado:0, aporteMensual:0, tasaAnual:0, historial:[] },
+    fondoEmergencia: { meses:3, ahorrado:0, aporteMensual:0, tasaAnual:0, historial:[] },
     mesActivo: MESES[new Date().getMonth()],
     anioActivo: ANIO_HOY,
     alarmas: [nuevaAlarma("Recordatorio")]
@@ -1054,7 +1054,7 @@ function hidratar(parsed, base){
     m.aporteMensual = m.aporteMensual||0;
     return m;
   });
-  s.fondoEmergencia = Object.assign({meses:6, ahorrado:0, aporteMensual:0, tasaAnual:0, historial:[]}, s.fondoEmergencia||{});
+  s.fondoEmergencia = Object.assign({meses:3, ahorrado:0, aporteMensual:0, tasaAnual:0, historial:[]}, s.fondoEmergencia||{});
   s.fondoEmergencia.historial = Array.isArray(s.fondoEmergencia.historial) ? s.fondoEmergencia.historial : [];
   s.alarmas = Array.isArray(s.alarmas) && s.alarmas.length
     ? s.alarmas.map(normalizarAlarma)
@@ -2357,16 +2357,40 @@ function importBackupJSON(evt){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = e=>{
+    let data;
     try{
-      state = hidratar(JSON.parse(e.target.result), defaultState());
+      data = JSON.parse(e.target.result);
+    }catch(err){
+      toast("El archivo no es un respaldo válido (no se pudo leer).");
+      evt.target.value = "";
+      return;
+    }
+    // Validar que parezca un respaldo de Cuentas Claras
+    const pareceRespaldo = data && (data.rubros || data.gastos || data.ingresoPrincipal || data.ingresos || data.deudas || data.metas);
+    if(!pareceRespaldo){
+      toast("Ese archivo no parece un respaldo de Cuentas Claras.");
+      evt.target.value = "";
+      return;
+    }
+    // Contar qué trae
+    const nG = (data.gastos||[]).length;
+    const nD = (data.deudas||[]).length;
+    const nM = (data.metas||[]).length;
+    const nOc = (data.ingresosOcasionales||data.ingresos||[]).length;
+    const resumen = `Este respaldo tiene:\n· ${nG} gasto(s)\n· ${nD} deuda(s)\n· ${nM} meta(s)\n· ${nOc} ingreso(s) ocasional(es)\n\n¿Reemplazar tus datos actuales con este respaldo?`;
+    if(!confirm(resumen)){ evt.target.value = ""; return; }
+    try{
+      state = hidratar(data, defaultState());
       saveState();
       renderAll();
       programarAlarma();
-      toast("Respaldo restaurado ✓");
-    }catch(err){ toast("El archivo no es un respaldo válido."); }
+      toast(`Restaurado ✓ · ${nG} gastos, ${nD} deudas, ${nM} metas`);
+    }catch(err){
+      toast("Error al restaurar. El respaldo puede estar dañado.");
+    }
+    evt.target.value = "";
   };
   reader.readAsText(file);
-  evt.target.value = "";
 }
 
 function downloadFile(filename, content, mime){
@@ -3314,7 +3338,7 @@ const CONFIG = {
   // Déjalo en "" para desactivar el aviso de actualización.
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "5.6";
+const APP_VERSION = "5.7";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -3584,7 +3608,9 @@ async function ccReprogramarNativo(){
   const LN = ccNativo();
   if(!LN) return false;
 
-  const permiso = await ccPedirPermisoNativo();
+  // Solo revisa si YA tiene permiso; NO lo pide al arrancar.
+  // El permiso se pide únicamente cuando el usuario toca "Activar notificaciones".
+  const permiso = await ccEstadoPermisoNativo();
   if(!permiso) return false;
   await ccCrearCanal();
   await ccRevisarAlarmasExactas();
