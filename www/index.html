@@ -2385,8 +2385,8 @@ function importGastosCSV(evt){
 }
 
 function exportBackupJSON(){
-  downloadFile("cuentas_claras_respaldo.json", JSON.stringify(state, null, 2), "application/json");
-  toast("Respaldo descargado");
+  const hoy = new Date().toISOString().slice(0,10); // 2026-08-27
+  downloadFile("cuentas_claras_respaldo_"+hoy+".json", JSON.stringify(state, null, 2), "application/json");
 }
 function importBackupJSON(evt){
   const file = evt.target.files[0];
@@ -2429,7 +2429,43 @@ function importBackupJSON(evt){
   reader.readAsText(file);
 }
 
-function downloadFile(filename, content, mime){
+async function downloadFile(filename, content, mime){
+  // En el APK (Android), usar Filesystem + Share para que el archivo se guarde
+  // de verdad y el usuario pueda mandárselo por WhatsApp o guardarlo donde quiera.
+  const FS = (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem) ? Capacitor.Plugins.Filesystem : null;
+  const SH = (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Share) ? Capacitor.Plugins.Share : null;
+  const esApk = window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform();
+
+  if(esApk && FS){
+    try{
+      const texto = (content instanceof Blob) ? await content.text() : String(content);
+      // Guardar en la carpeta de Documentos de la app (accesible)
+      const res = await FS.writeFile({
+        path: filename,
+        data: texto,
+        directory: "DOCUMENTS",
+        encoding: "utf8"
+      });
+      // Abrir el menú de compartir para que lo mande por WhatsApp / lo guarde
+      if(SH){
+        try{
+          await SH.share({
+            title: "Respaldo Cuentas Claras",
+            text: "Guarda este archivo para restaurar tus datos.",
+            url: res.uri,
+            dialogTitle: "Guardar o compartir tu respaldo"
+          });
+        }catch(e){ /* si cancela el share, igual quedó guardado */ }
+      }
+      toast("Respaldo guardado en Documentos ✓");
+      return;
+    }catch(e){
+      toast("No se pudo guardar el respaldo. Intenta de nuevo.");
+      return;
+    }
+  }
+
+  // En navegador (PC): método clásico
   const blob = content instanceof Blob ? content : new Blob([content], {type:mime});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -3376,7 +3412,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "6.0";
+const APP_VERSION = "6.1";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
