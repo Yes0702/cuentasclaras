@@ -701,6 +701,8 @@
         </div>
         <label>Pago mensual</label>
         <input type="text" inputmode="numeric" id="dPago" class="mono-input" placeholder="0">
+        <label>% de interés anual que te cobran (opcional)</label>
+        <input type="text" inputmode="decimal" id="dTasa" class="mono-input" placeholder="Ej: 24">
         <label>Fecha objetivo de pago (opcional)</label>
         <input type="date" id="dFecha" onchange="onFechaDeudaChange()">
         <label>O meses para pagarla (opcional, calcula el pago sugerido)</label>
@@ -1396,13 +1398,15 @@ function renderDashboard(){
   const repartido = pctRepartido();
   const sob = sobrante();
 
-  // anillo de asignación
-  const avanceRing = Math.max(0, Math.min(100, repartido));
+  // anillo: ahora mide cuánto del INGRESO TOTAL está asignado (fijos + variables + ahorro)
+  const presuTotal = totalPresupuestado();
+  const pctIngresoAsignado = state.ingreso>0 ? (presuTotal/state.ingreso*100) : 0;
+  const avanceRing = Math.max(0, Math.min(100, pctIngresoAsignado));
   const circ = 2*Math.PI*53;
   const ring = document.getElementById("ringFill");
   ring.setAttribute("stroke-dasharray", circ.toFixed(2));
   ring.setAttribute("stroke-dashoffset", (circ*(1-avanceRing/100)).toFixed(2));
-  document.getElementById("ringPct").textContent = pct(repartido);
+  document.getElementById("ringPct").textContent = pct(pctIngresoAsignado);
 
   const hTitle = document.getElementById("heroTitle");
   const hSub = document.getElementById("heroSub");
@@ -1410,18 +1414,18 @@ function renderDashboard(){
     ring.setAttribute("stroke", "#E2584D");
     hTitle.textContent = "Tus gastos fijos superan el ingreso";
     hSub.textContent = `Los fijos suman ${money(totalFijos())} y tu ingreso es ${money(state.ingreso)}. Revisa los rubros fijos.`;
-  } else if(Math.abs(repartido-100) < 0.05){
+  } else if(pctIngresoAsignado >= 99.5 && pctIngresoAsignado <= 100.5){
     ring.setAttribute("stroke", "#12A57A");
     hTitle.textContent = "Presupuesto cuadrado";
-    hSub.textContent = `Fijos ${money(totalFijos())} · Sobrante repartido ${money(sob)}.`;
-  } else if(repartido < 100){
+    hSub.textContent = `Asignaste el 100% de tu ingreso de ${money(state.ingreso)}.`;
+  } else if(pctIngresoAsignado < 99.5){
     ring.setAttribute("stroke", "#D2A012");
-    hTitle.textContent = `Falta repartir ${pct(100-repartido)}`;
-    hSub.textContent = `Quedan ${money(sob*(100-repartido)/100)} del sobrante sin asignar.`;
+    hTitle.textContent = `Has asignado ${pct(pctIngresoAsignado)} de tu ingreso`;
+    hSub.textContent = `Te queda ${money(state.ingreso - presuTotal)} sin asignar. Repártelo en tus rubros.`;
   } else {
     ring.setAttribute("stroke", "#E2584D");
-    hTitle.textContent = `Te pasaste por ${pct(repartido-100)}`;
-    hSub.textContent = `Estás repartiendo ${money(sob*repartido/100)} de un sobrante de ${money(sob)}.`;
+    hTitle.textContent = `Te pasaste del ingreso`;
+    hSub.textContent = `Tienes asignado ${money(presuTotal)} pero tu ingreso es ${money(state.ingreso)}.`;
   }
 
   const presu = totalPresupuestado();
@@ -2663,9 +2667,11 @@ function addDeuda(){
   const pago = numFromMasked("dPago");
   const fecha = document.getElementById("dFecha").value;
   const mesesObjetivo = parseInt(document.getElementById("dMeses").value)||0;
+  const tasaEl = document.getElementById("dTasa");
+  const tasaAnual = tasaEl ? (parseFloat(String(tasaEl.value).replace(",","."))||0) : 0;
   if(!nombre || inicial<=0 || pago<=0){ toast("Completa nombre, deuda inicial y pago mensual."); return; }
-  state.deudas.push({id:uid(), nombre, inicial, saldo, pago, fecha, mesesObjetivo});
-  ["dNombre","dInicial","dSaldo","dPago","dFecha","dMeses"].forEach(id=>document.getElementById(id).value="");
+  state.deudas.push({id:uid(), nombre, inicial, saldo, pago, fecha, mesesObjetivo, tasaAnual, interesPagado:0});
+  ["dNombre","dInicial","dSaldo","dPago","dTasa","dFecha","dMeses"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("deudaPagoHint").textContent = "";
   saveState();
   renderDeudas();
@@ -2673,17 +2679,55 @@ function addDeuda(){
   toast("Deuda agregada");
 }
 let abonandoDeudaId = null;
+function ccPreviewAbono(id){
+  const d = state.deudas.find(x=>x.id===id);
+  if(!d) return;
+  const el = document.getElementById("abonoPreview_"+id);
+  if(el){ maskMiles(document.getElementById("abonoDeudaInput_"+id)); }
+  if(!el || !(d.tasaAnual>0)) return;
+  const monto = numFromMasked("abonoDeudaInput_"+id);
+  if(monto<=0){ el.textContent = "Escribe el monto para ver cuánto va a capital y cuánto a interés."; return; }
+  const interesMes = Math.round(d.saldo * (d.tasaAnual/100/12));
+  const aCapital = monto - interesMes;
+  if(aCapital<=0){
+    el.innerHTML = `⚠ Con ${money(monto)} no alcanzas a cubrir el interés (~${money(interesMes)}). La deuda subiría.`;
+    el.style.color = "#C0392B";
+  }else{
+    el.innerHTML = `De ${money(monto)}: <b>${money(aCapital)}</b> a capital · <b>${money(interesMes)}</b> a interés (aprox.).`;
+    el.style.color = "";
+  }
+}
 function confirmarAbonoDeuda(id){
   const d = state.deudas.find(x=>x.id===id);
   if(!d) return;
   const monto = numFromMasked("abonoDeudaInput_"+id);
   if(monto<=0){ toast("Ingresa un monto mayor a cero."); return; }
-  d.saldo = Math.max(0, d.saldo - monto);
+
+  const tasaMensual = (d.tasaAnual||0)/100/12;
+  const interesMes = Math.round(d.saldo * tasaMensual);   // interés que genera el saldo este mes
+  const aCapital = monto - interesMes;                    // lo que de verdad baja la deuda
+
+  if(tasaMensual>0){
+    if(aCapital <= 0){
+      // El pago no alcanza a cubrir el interés: la deuda crece
+      const nuevoInteres = interesMes - monto;
+      d.saldo = d.saldo + nuevoInteres;
+      d.interesPagado = (d.interesPagado||0) + monto;
+      toast("⚠ Tu pago no cubre el interés. La deuda subió "+money(nuevoInteres)+".");
+    } else {
+      d.saldo = Math.max(0, d.saldo - aCapital);
+      d.interesPagado = (d.interesPagado||0) + interesMes;
+      toast("Abono: "+money(aCapital)+" a capital · "+money(interesMes)+" a interés (aprox.)");
+    }
+  } else {
+    // Sin tasa: todo el pago baja el capital (como antes)
+    d.saldo = Math.max(0, d.saldo - monto);
+    toast("Abono registrado");
+  }
   abonandoDeudaId = null;
   saveState();
   renderDeudas();
   renderDashboard();
-  toast("Abono registrado");
 }
 function deleteDeuda(id){
   limpiarPendiente("deuda:"+id);
@@ -2702,6 +2746,8 @@ function saveDeudaEdit(id){
   d.inicial = numFromMasked("edI_"+id);
   d.saldo = numFromMasked("edS_"+id);
   d.pago = numFromMasked("edP_"+id);
+  const edT = document.getElementById("edT_"+id);
+  if(edT) d.tasaAnual = parseFloat(String(edT.value).replace(",","."))||0;
   d.fecha = document.getElementById("edF_"+id).value;
   d.mesesObjetivo = parseInt(document.getElementById("edM_"+id).value)||0;
   editingDeudaId = null;
@@ -2744,6 +2790,8 @@ function renderDeudas(){
         </div>
         <label>Pago mensual</label>
         <input type="text" inputmode="numeric" id="edP_${d.id}" class="mono-input" value="${d.pago.toLocaleString('es-CO')}">
+        <label>% de interés anual (opcional)</label>
+        <input type="text" inputmode="decimal" id="edT_${d.id}" class="mono-input" value="${d.tasaAnual||""}">
         <label>Fecha objetivo de pago (opcional)</label>
         <input type="date" id="edF_${d.id}" value="${d.fecha||""}" onchange="onFechaDeudaEditChange('${d.id}')">
         <label>O meses para pagarla (opcional, calcula el pago sugerido)</label>
@@ -2775,9 +2823,13 @@ function renderDeudas(){
         <div class="bar-label"><span style="color:#C9701F;">Saldo: ${money(d.saldo)}</span><span>${pct(pctPagado)} pagado</span></div>
         <div class="bar-track"><div class="bar-fill ${barClass}" style="width:${pctPagado}%"></div></div>
       </div>
+      ${d.tasaAnual>0 ? `<div class="hint" style="margin:-2px 0 10px; padding:8px 10px; background:#FFF4E6; border:1px solid #F0D8A8; border-radius:9px; color:#8A5A1F;">
+        📊 Interés ${d.tasaAnual}% anual · este mes generaría ~${money(Math.round(d.saldo*(d.tasaAnual/100/12)))} de interés${d.interesPagado>0 ? ` · llevas ${money(Math.round(d.interesPagado))} pagados en intereses` : ""}
+      </div>` : ""}
       ${abonandoDeudaId===d.id
         ? `<div onclick="event.stopPropagation();">
-             <input type="text" inputmode="numeric" id="abonoDeudaInput_${d.id}" class="mono-input" placeholder="Monto del abono" style="margin-bottom:8px;">
+             <input type="text" inputmode="numeric" id="abonoDeudaInput_${d.id}" class="mono-input" placeholder="Monto del abono" style="margin-bottom:6px;" oninput="ccPreviewAbono('${d.id}')">
+             ${d.tasaAnual>0 ? `<div class="hint" id="abonoPreview_${d.id}" style="margin-bottom:8px;">Escribe el monto para ver cuánto va a capital y cuánto a interés.</div>` : ""}
              <div class="edit-actions">
                <button class="btn-primary" style="margin:0;" onclick="event.stopPropagation(); confirmarAbonoDeuda('${d.id}')">Registrar</button>
                <button class="btn-ghost" style="margin:0;" onclick="event.stopPropagation(); abonandoDeudaId=null; renderDeudas();">Cancelar</button>
@@ -3221,7 +3273,7 @@ const CONFIG = {
   // Déjalo en "" para desactivar el aviso de actualización.
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "5.3";
+const APP_VERSION = "5.4";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
