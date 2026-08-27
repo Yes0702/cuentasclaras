@@ -3314,7 +3314,7 @@ const CONFIG = {
   // Déjalo en "" para desactivar el aviso de actualización.
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "5.5";
+const APP_VERSION = "5.6";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -3335,12 +3335,15 @@ function ccCompararVersiones(a, b){
 async function ccChequearActualizacion(manual){
   if(!CONFIG.urlVersion){ if(manual) toast("Chequeo de versión no configurado."); return; }
   try{
-    const resp = await fetch(CONFIG.urlVersion, { cache: "no-store" });
+    // timestamp único para evitar que se lea una copia en caché
+    const url = CONFIG.urlVersion + (CONFIG.urlVersion.includes("?")?"&":"?") + "nocache=" + Date.now();
+    const resp = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
     if(!resp.ok){ if(manual) toast("No se pudo consultar (código "+resp.status+")."); return; }
     const info = await resp.json();
     if(!info || !info.version){ if(manual) toast("Respuesta sin versión."); return; }
     if(ccCompararVersiones(info.version, APP_VERSION) === 1){
       mostrarAvisoActualizacion(info);
+      if(manual) toast("¡Hay una nueva versión! ("+info.version+")");
     } else {
       if(manual) toast("Ya tienes la última versión ("+APP_VERSION+").");
     }
