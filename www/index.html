@@ -3334,19 +3334,21 @@ const CONFIG = {
 
   mostrarDonacion: true,        // pon false para esconder todo el bloque
 
-  // Chequeo de actualizaciones: URL pública del version.json (GitHub Releases o raw)
-  // Déjalo en "" para desactivar el aviso de actualización.
+  // Chequeo de actualizaciones.
+  // apiVersion: API de GitHub (da la última release sin caché). Es la vía principal.
+  // urlVersion: enlace directo al version.json (respaldo y para leer la URL del APK).
+  apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "5.7";
+const APP_VERSION = "5.8";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
    ===================================================================== */
 function ccCompararVersiones(a, b){
   // devuelve 1 si a>b, -1 si a<b, 0 si iguales. Formato "5.1" o "5.1.3"
-  const pa = String(a).split(".").map(n=>parseInt(n)||0);
-  const pb = String(b).split(".").map(n=>parseInt(n)||0);
+  const pa = String(a).replace(/^v/i,"").split(".").map(n=>parseInt(n)||0);
+  const pb = String(b).replace(/^v/i,"").split(".").map(n=>parseInt(n)||0);
   const len = Math.max(pa.length, pb.length);
   for(let i=0;i<len;i++){
     const x=pa[i]||0, y=pb[i]||0;
@@ -3357,17 +3359,37 @@ function ccCompararVersiones(a, b){
 }
 
 async function ccChequearActualizacion(manual){
-  if(!CONFIG.urlVersion){ if(manual) toast("Chequeo de versión no configurado."); return; }
+  if(!CONFIG.apiVersion && !CONFIG.urlVersion){ if(manual) toast("Chequeo no configurado."); return; }
   try{
-    // timestamp único para evitar que se lea una copia en caché
-    const url = CONFIG.urlVersion + (CONFIG.urlVersion.includes("?")?"&":"?") + "nocache=" + Date.now();
-    const resp = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
-    if(!resp.ok){ if(manual) toast("No se pudo consultar (código "+resp.status+")."); return; }
-    const info = await resp.json();
-    if(!info || !info.version){ if(manual) toast("Respuesta sin versión."); return; }
-    if(ccCompararVersiones(info.version, APP_VERSION) === 1){
-      mostrarAvisoActualizacion(info);
-      if(manual) toast("¡Hay una nueva versión! ("+info.version+")");
+    let versionRemota = null;
+    let urlApk = CONFIG.urlVersion ? CONFIG.urlVersion.replace("version.json","CuentasClaras.apk") : "";
+    let novedades = "";
+
+    // 1) Intentar con la API de GitHub (la más confiable, sin caché)
+    if(CONFIG.apiVersion){
+      try{
+        const r = await fetch(CONFIG.apiVersion, { cache:"reload", headers:{ "Accept":"application/vnd.github+json" } });
+        if(r.ok){
+          const rel = await r.json();
+          if(rel && rel.tag_name) versionRemota = rel.tag_name;   // ej "v5.7"
+        }
+      }catch(e){}
+    }
+
+    // 2) Si la API no dio versión, intentar leer el version.json directo
+    if(!versionRemota && CONFIG.urlVersion){
+      const r2 = await fetch(CONFIG.urlVersion, { cache:"reload", headers:{ "Cache-Control":"no-cache" } });
+      if(r2.ok){
+        const info = await r2.json();
+        if(info && info.version){ versionRemota = info.version; urlApk = info.url || urlApk; novedades = info.novedades || ""; }
+      }
+    }
+
+    if(!versionRemota){ if(manual) toast("No se pudo consultar la versión."); return; }
+
+    if(ccCompararVersiones(versionRemota, APP_VERSION) === 1){
+      mostrarAvisoActualizacion({ version: String(versionRemota).replace(/^v/i,""), url: urlApk, novedades });
+      if(manual) toast("¡Hay una nueva versión! ("+String(versionRemota).replace(/^v/i,"")+")");
     } else {
       if(manual) toast("Ya tienes la última versión ("+APP_VERSION+").");
     }
