@@ -566,6 +566,13 @@
           <div class="kpi" style="box-shadow:none;"><div class="k-label">% del total</div><div class="k-value" id="presuPctIngreso">$0</div></div>
           <div class="kpi blue" style="box-shadow:none;" id="presuSobranteBox"><div class="k-label">Sobrante</div><div class="k-value" id="presuSobrante">$0</div></div>
         </div>
+        <div id="presuDeudaRow" style="display:none; margin-top:10px; padding:9px 12px; background:#FFF4E6; border:1px solid #F0D8A8; border-radius:10px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; color:#8A5A1F; font-weight:600;">
+            <span>💳 Pagos de deudas este mes</span>
+            <span id="presuDeudaMonto">$0</span>
+          </div>
+          <div style="font-size:11px; color:#8A5A1F; opacity:.85; margin-top:3px;">Ya descontados de tu sobrante. Es dinero comprometido con los bancos.</div>
+        </div>
         <div class="bar-row" style="margin-top:14px;">
           <div class="bar-label"><span>Reparto del sobrante</span><span id="presuTotalPct">0%</span></div>
           <div class="bar-track"><div class="bar-fill" id="presuBar" style="width:0%"></div></div>
@@ -691,6 +698,16 @@
 
     <!-- ================= DEUDAS ================= -->
     <section class="view" id="view-deudas">
+      <div id="guiaDeudasBox" style="display:none; margin-bottom:16px; padding:16px; background:linear-gradient(135deg,#13B183,#0B7D5C); color:#fff; border-radius:16px;">
+        <div style="font-size:15px; font-weight:800; margin-bottom:8px;">📋 Empecemos por tus deudas</div>
+        <div style="font-size:13px; line-height:1.55; opacity:.95;">
+          Antes de repartir tu presupuesto, registremos las deudas con bancos o entidades. Así sabrás con cuánto cuentas de verdad para trabajar. Cuando termines, sigue a Presupuesto.
+        </div>
+        <button onclick="ccContinuarAPresupuesto()" style="margin-top:12px; background:#fff; color:#0B7D5C; border:none; border-radius:12px; padding:12px 20px; font-weight:800; font-size:14px; cursor:pointer;">
+          Ya agregué mis deudas · Ir a Presupuesto →
+        </button>
+        <div style="font-size:11.5px; opacity:.8; margin-top:8px;">¿No tienes deudas? También puedes seguir directo.</div>
+      </div>
       <h2 class="section-title" style="margin-top:0;">Nueva deuda<div class="rule"></div></h2>
       <div class="card">
         <label>Nombre</label>
@@ -1133,11 +1150,15 @@ function limpiarPendiente(key){ pendingConfirm.delete(key); }
 function totalFijos(){
   return state.rubros.filter(r=>r.modo==="valor").reduce((s,r)=> s + (r.valor||0), 0);
 }
+function totalPagosDeuda(){
+  // suma de los pagos mensuales de las deudas que aún tienen saldo
+  return state.deudas.filter(d=>d.saldo>0).reduce((s,d)=> s + (d.pago||0), 0);
+}
 function totalPctIngreso(){
   return state.rubros.filter(r=>r.modo==="pctIngreso").reduce((s,r)=> s + (state.ingreso * (r.pct||0)/100), 0);
 }
 function sobrante(){
-  return state.ingreso - totalFijos() - totalPctIngreso();
+  return state.ingreso - totalFijos() - totalPctIngreso() - totalPagosDeuda();
 }
 function pctRepartido(){
   return state.rubros.filter(r=>r.modo==="pct").reduce((s,r)=> s + (r.pct||0), 0);
@@ -1689,6 +1710,18 @@ function renderIngresos(){
   if(mesLbl) mesLbl.textContent = state.mesActivo + " " + state.anioActivo;
 }
 
+function ccActualizarFilaDeuda(){
+  const row = document.getElementById("presuDeudaRow");
+  const monto = document.getElementById("presuDeudaMonto");
+  if(!row || !monto) return;
+  const pagos = totalPagosDeuda();
+  if(pagos > 0){
+    row.style.display = "block";
+    monto.textContent = money(pagos);
+  } else {
+    row.style.display = "none";
+  }
+}
 function renderPresupuesto(){
   renderIngresos();
   const fijos = totalFijos();
@@ -1698,6 +1731,7 @@ function renderPresupuesto(){
   document.getElementById("presuFijos").textContent = money(fijos);
   document.getElementById("presuPctIngreso").textContent = money(totalPctIngreso());
   document.getElementById("presuSobrante").textContent = money(sob);
+  ccActualizarFilaDeuda();
   const sobBox = document.getElementById("presuSobranteBox");
   sobBox.classList.toggle("neg", sob < 0);
   sobBox.classList.toggle("blue", sob >= 0);
@@ -1814,6 +1848,7 @@ function renderPresupuestoLigero(){
   document.getElementById("presuFijos").textContent = money(fijos);
   document.getElementById("presuPctIngreso").textContent = money(totalPctIngreso());
   document.getElementById("presuSobrante").textContent = money(sob);
+  ccActualizarFilaDeuda();
   document.getElementById("presuTotalPct").textContent = pct(repartido);
   const bar = document.getElementById("presuBar");
   bar.style.width = Math.min(100, Math.max(0,repartido)) + "%";
@@ -3340,7 +3375,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "5.8";
+const APP_VERSION = "5.9";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -4141,7 +4176,17 @@ function ccCerrarWelcome(){
   try{ localStorage.setItem(CC_WELCOME_KEY, "1"); }catch(e){}
   const el = document.getElementById("ccWelcome");
   if(el) el.style.display = "none";
-  showView("presupuesto");   // lleva directo a Presupuesto para empezar
+  showView("deudas");   // primero deudas, para saber el panorama real
+  mostrarGuiaDeudas();
+}
+function mostrarGuiaDeudas(){
+  const g = document.getElementById("guiaDeudasBox");
+  if(g) g.style.display = "block";
+}
+function ccContinuarAPresupuesto(){
+  const g = document.getElementById("guiaDeudasBox");
+  if(g) g.style.display = "none";
+  showView("presupuesto");
 }
 ccMostrarWelcomeSiPrimeraVez();
 
