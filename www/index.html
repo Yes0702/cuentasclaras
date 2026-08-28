@@ -1738,20 +1738,14 @@ function renderIngresos(){
 }
 
 function ccActualizarFilaDeuda(){
+  // La deuda ahora se muestra como tarjeta dentro del grupo Fijo,
+  // así que esta fila naranja del panel de arriba ya no se usa.
   const row = document.getElementById("presuDeudaRow");
-  const monto = document.getElementById("presuDeudaMonto");
-  if(!row || !monto) return;
-  const pagos = totalPagosDeuda();
-  if(pagos > 0){
-    row.style.display = "block";
-    monto.textContent = money(pagos);
-  } else {
-    row.style.display = "none";
-  }
+  if(row) row.style.display = "none";
 }
 function renderPresupuesto(){
   renderIngresos();
-  const fijos = totalFijos();
+  const fijos = totalFijos() + totalPagosDeuda();
   const sob = sobrante();
   const repartido = pctRepartido();
 
@@ -1780,8 +1774,15 @@ function renderPresupuesto(){
 
   TIPOS.forEach(t=>{
     const rubrosTipo = state.rubros.filter(r=>r.tipo===t).sort((a,b)=>a.prioridad-b.prioridad);
-    if(rubrosTipo.length===0) return;
-    const groupMonto = rubrosTipo.reduce((s,r)=>s+montoRubro(r),0);
+    const deudasActivas = state.deudas.filter(d=>d.saldo>0);
+    const esFijoConDeudas = (t==="Fijo" && deudasActivas.length>0);
+    if(rubrosTipo.length===0 && !esFijoConDeudas) return;
+
+    // El subtotal del grupo Fijo incluye los pagos de deuda
+    let groupMonto = rubrosTipo.reduce((s,r)=>s+montoRubro(r),0);
+    if(esFijoConDeudas){
+      groupMonto += deudasActivas.reduce((s,d)=>s+(d.pago||0),0);
+    }
 
     const header = document.createElement("div");
     header.className = "group-header";
@@ -1847,44 +1848,27 @@ function renderPresupuesto(){
       }
     });
 
+    // Dentro del grupo Fijo: mostrar las deudas como tarjetas (cuentan como fijo)
+    if(esFijoConDeudas){
+      deudasActivas.forEach(d=>{
+        const card = document.createElement("div");
+        card.className = "deuda-presu-card";
+        card.innerHTML = `
+          <div style="flex:1; min-width:0;">
+            <div class="dp-nombre">💳 ${esc(d.nombre)}</div>
+            <div class="dp-sub">Saldo: ${money(d.saldo)}${d.tasaAnual>0 ? " · "+d.tasaAnual+"% anual" : ""}</div>
+          </div>
+          <div class="dp-monto">${money(d.pago||0)}<span>/mes</span></div>`;
+        card.onclick = ()=> showView("deudas");
+        box.appendChild(card);
+      });
+    }
+
     const totalRow = document.createElement("div");
     totalRow.className = "group-total";
     totalRow.innerHTML = `<span>Subtotal ${t}</span><span data-group-subtotal="${t}">${money(groupMonto)}</span>`;
     box.appendChild(totalRow);
   });
-
-  // --- Bloque de Deudas (Etapa 1: visual). Muestra las deudas con saldo
-  // como tarjetas color piel/naranja. El pago se sigue descontando igual
-  // que antes; esto es solo para que se vean dentro del presupuesto. ---
-  const deudasActivas = state.deudas.filter(d=>d.saldo>0);
-  if(deudasActivas.length){
-    const totalPagos = deudasActivas.reduce((s,d)=>s+(d.pago||0),0);
-    const header = document.createElement("div");
-    header.className = "group-header";
-    header.innerHTML = `<span>Pago de deudas</span><span class="g-right">${money(totalPagos)}</span>`;
-    cont.appendChild(header);
-
-    const nota = document.createElement("div");
-    nota.style.cssText = "font-size:11.5px; color:var(--ink-soft); margin:-4px 2px 8px; line-height:1.4;";
-    nota.textContent = "Estos pagos ya se descuentan de tu dinero disponible. Registra y edita las deudas en la pestaña Deudas.";
-    cont.appendChild(nota);
-
-    const box = document.createElement("div");
-    box.className = "group-box";
-    deudasActivas.forEach(d=>{
-      const card = document.createElement("div");
-      card.className = "deuda-presu-card";
-      card.innerHTML = `
-        <div style="flex:1; min-width:0;">
-          <div class="dp-nombre">💳 ${esc(d.nombre)}</div>
-          <div class="dp-sub">Saldo: ${money(d.saldo)}${d.tasaAnual>0 ? " · "+d.tasaAnual+"% anual" : ""}</div>
-        </div>
-        <div class="dp-monto">${money(d.pago||0)}<span>/mes</span></div>`;
-      card.onclick = ()=> showView("deudas");
-      box.appendChild(card);
-    });
-    cont.appendChild(box);
-  }
 
   cont.querySelectorAll(".cantInput").forEach(inp=>{
     const idx = +inp.dataset.idx;
@@ -1910,7 +1894,7 @@ function renderPresupuesto(){
 
 /* Actualiza montos sin reconstruir el DOM (para no perder el foco al escribir) */
 function renderPresupuestoLigero(){
-  const fijos = totalFijos(), sob = sobrante(), repartido = pctRepartido();
+  const fijos = totalFijos() + totalPagosDeuda(), sob = sobrante(), repartido = pctRepartido();
   document.getElementById("presuFijos").textContent = money(fijos);
   document.getElementById("presuPctIngreso").textContent = money(totalPctIngreso());
   document.getElementById("presuSobrante").textContent = money(sob);
@@ -3541,7 +3525,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "7.0";
+const APP_VERSION = "7.1";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
