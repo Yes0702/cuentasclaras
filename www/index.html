@@ -802,6 +802,13 @@
         </div>
         <div class="hint" id="alarmaPermisoEstado" style="margin-top:8px;"></div>
         <div class="hint" id="alarmaFondoEstado" style="margin-top:4px;"></div>
+        <div id="avisoNoNotif" style="display:none; margin-top:12px; padding:12px 14px; background:#FFF4E6; border:1px solid #F0D8A8; border-radius:11px;">
+          <div style="font-size:13px; color:#8A5A1F; font-weight:700; margin-bottom:4px;">⚠ No activaste las notificaciones</div>
+          <div style="font-size:12.5px; color:#8A5A1F; line-height:1.5;">
+            Sin ellas, <b>no te llegarán los recordatorios de alarma</b> para registrar tus gastos, y es fácil que se te olvide anotarlos. Puedes activarlas cuando quieras.
+          </div>
+          <button class="btn-primary" style="margin-top:10px; width:100%;" onclick="pedirPermisoNotificaciones()">Activar notificaciones ahora</button>
+        </div>
       </div>
       <div id="alarmasList"></div>
       <button class="add-row-btn" onclick="agregarAlarma()">+ Agregar otra alarma</button>
@@ -2987,6 +2994,31 @@ function addMeta(){
   renderAhorros();
   renderDashboard();
   toast("Meta creada");
+  ccAvisarSiExcedeAhorro();
+}
+
+/* Si lo asignado supera lo disponible, lleva la pantalla arriba al aviso
+   naranja para que el usuario no lo pase por alto, y lo resalta un momento. */
+function ccAvisarSiExcedeAhorro(){
+  const disponible = ahorroDisponibleMensual();
+  const comprometido = totalComprometidoAhorro();
+  if(comprometido > disponible){
+    const box = document.getElementById("ahorroDisponibleBox");
+    const cont = document.getElementById("views");
+    if(box && cont){
+      setTimeout(()=>{
+        cont.scrollTo({ top: 0, behavior: "smooth" });
+        // parpadeo suave para llamar la atención
+        const card = box.firstElementChild;
+        if(card){
+          card.style.transition = "transform .2s";
+          card.style.transform = "scale(1.03)";
+          setTimeout(()=>{ card.style.transform = "scale(1)"; }, 260);
+        }
+      }, 120);
+    }
+    toast("⚠ Revisa: tus ahorros superan lo disponible");
+  }
 }
 function calcularAporteMeta(objetivo, ahorrado, meses){
   const falta = Math.max(0, objetivo-ahorrado);
@@ -3428,7 +3460,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "6.3";
+const APP_VERSION = "6.5";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -3919,7 +3951,9 @@ function mostrarNotificacion(titulo, cuerpo){
 function pedirPermisoNotificaciones(){
   if(ccNativo()){
     ccPedirPermisoNativo().then(async ok=>{
-      toast(ok ? "Notificaciones activadas ✓" : "Debes permitirlas en Ajustes de Android.");
+      toast(ok ? "Notificaciones activadas ✓" : "No se activaron las notificaciones.");
+      const aviso = document.getElementById("avisoNoNotif");
+      if(aviso) aviso.style.display = ok ? "none" : "block";
       if(ok){ await ccCrearCanal(); await ccReprogramarNativo(); }
       renderEstadosAlarmas();
     });
@@ -3927,9 +3961,17 @@ function pedirPermisoNotificaciones(){
   }
   if(!("Notification" in window)){ toast("Este navegador no soporta notificaciones."); return; }
   if(Notification.permission === "granted"){ toast("Las notificaciones ya están activas."); renderEstadosAlarmas(); return; }
-  if(Notification.permission === "denied"){ toast("Están bloqueadas: actívalas en los ajustes del navegador."); return; }
+  if(Notification.permission === "denied"){
+    const aviso = document.getElementById("avisoNoNotif");
+    if(aviso) aviso.style.display = "block";
+    toast("Están bloqueadas: actívalas en los ajustes del navegador.");
+    return;
+  }
   Notification.requestPermission().then(p=>{
-    toast(p==="granted" ? "Notificaciones activadas ✓" : "No se activaron las notificaciones.");
+    const ok = p==="granted";
+    toast(ok ? "Notificaciones activadas ✓" : "No se activaron las notificaciones.");
+    const aviso = document.getElementById("avisoNoNotif");
+    if(aviso) aviso.style.display = ok ? "none" : "block";
     renderEstadosAlarmas();
   });
 }
@@ -4040,6 +4082,8 @@ function renderEstadosAlarmas(){
           ? "Notificaciones activas ✓ — te llegarán a tiempo."
           : "⚠ Aún <b>no</b> has activado las notificaciones. Toca “Activar notificaciones”.";
       }
+      const aviso = document.getElementById("avisoNoNotif");
+      if(aviso && concedido) aviso.style.display = "none";
     }).catch(()=>{});
   } else {
     if(permEl){
