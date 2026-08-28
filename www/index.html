@@ -3498,7 +3498,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "6.8";
+const APP_VERSION = "6.9";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -3535,11 +3535,15 @@ async function ccChequearActualizacion(manual){
   let novedades = "";
   let dondeErr = "";
 
-  // 1) API de GitHub (la más confiable). Con timeout para datos móviles.
+  // 1) API de GitHub (la más confiable). Con timeout y anti-caché.
   if(CONFIG.apiVersion){
-    const r = await ccFetchConTimeout(CONFIG.apiVersion, {
+    const r = await ccFetchConTimeout(CONFIG.apiVersion + "?_=" + Date.now(), {
       method: "GET",
-      headers: { "Accept":"application/vnd.github+json" }
+      headers: {
+        "Accept":"application/vnd.github+json",
+        "Cache-Control":"no-cache, no-store, must-revalidate",
+        "Pragma":"no-cache"
+      }
     }, 8000);
     if(r && r.ok){
       try{
