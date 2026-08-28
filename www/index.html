@@ -2104,10 +2104,13 @@ function toggleVerGastosFijos(){
 
 /* Busca si un rubro fijo ya está registrado como gasto en el mes activo */
 function gastoFijoDelMes(nombreRubro){
+  // Detecta el gasto fijo del mes, ya sea marcado con origenFijo (nuevo)
+  // o registrado antes con el mismo rubro y nota "Gasto fijo" (versiones viejas).
   return state.gastos.find(g=>
-    g.origenFijo === nombreRubro &&
     g.mes === state.mesActivo &&
-    g.anio === state.anioActivo
+    g.anio === state.anioActivo &&
+    (g.origenFijo === nombreRubro ||
+     (g.rubro === nombreRubro && (g.origenFijo || g.nota === "Gasto fijo")))
   );
 }
 
@@ -2166,6 +2169,11 @@ function toggleGastoFijo(nombreRubro){
     if(!r) return;
     const valor = montoRubro(r);
     if(valor<=0){ toast("Ese rubro no tiene valor asignado. Ponle un monto en Presupuesto."); return; }
+    // Blindaje: eliminar cualquier gasto previo del mismo rubro/mes para no duplicar
+    state.gastos = state.gastos.filter(g=>!(
+      g.mes===state.mesActivo && g.anio===state.anioActivo &&
+      g.rubro===nombreRubro && (g.origenFijo || g.nota==="Gasto fijo")
+    ));
     const hoy = new Date();
     const fecha = new Date(state.anioActivo, MESES.indexOf(state.mesActivo), Math.min(hoy.getDate(), 28))
                     .toISOString().slice(0,10);
@@ -2444,32 +2452,41 @@ async function downloadFile(filename, content, mime){
   const esApk = window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform();
 
   if(esApk && FS){
-    try{
-      const texto = (content instanceof Blob) ? await content.text() : String(content);
-      // Guardar en la carpeta de Documentos de la app (accesible)
-      const res = await FS.writeFile({
-        path: filename,
-        data: texto,
-        directory: "DOCUMENTS",
-        encoding: "utf8"
-      });
-      // Abrir el menú de compartir para que lo mande por WhatsApp / lo guarde
+    const texto = (content instanceof Blob) ? await content.text() : String(content);
+    // Intentar varios directorios en orden (algunos celulares bloquean DOCUMENTS)
+    const directorios = ["EXTERNAL", "DOCUMENTS", "DATA", "CACHE"];
+    let uriGuardada = null;
+    for(const dir of directorios){
+      try{
+        const res = await FS.writeFile({ path: filename, data: texto, directory: dir, encoding: "utf8" });
+        uriGuardada = res.uri;
+        break;
+      }catch(e){ /* prueba el siguiente */ }
+    }
+    if(uriGuardada){
       if(SH){
         try{
           await SH.share({
             title: "Respaldo Cuentas Claras",
             text: "Guarda este archivo para restaurar tus datos.",
-            url: res.uri,
+            url: uriGuardada,
             dialogTitle: "Guardar o compartir tu respaldo"
           });
         }catch(e){ /* si cancela el share, igual quedó guardado */ }
       }
-      toast("Respaldo guardado en Documentos ✓");
-      return;
-    }catch(e){
-      toast("No se pudo guardar el respaldo. Intenta de nuevo.");
+      toast("Respaldo guardado ✓");
       return;
     }
+    // Si Filesystem falló en todos, intentar compartir el texto directamente
+    if(SH){
+      try{
+        await SH.share({ title:"Respaldo Cuentas Claras", text: texto, dialogTitle:"Guardar tu respaldo" });
+        toast("Comparte y guarda tu respaldo");
+        return;
+      }catch(e){}
+    }
+    toast("No se pudo guardar. Revisa permisos de almacenamiento.");
+    return;
   }
 
   // En navegador (PC): método clásico
@@ -3460,7 +3477,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "6.5";
+const APP_VERSION = "6.6";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -3478,6 +3495,18 @@ function ccCompararVersiones(a, b){
   return 0;
 }
 
+async function ccFetchConTimeout(url, opciones, ms){
+  // fetch con límite de tiempo, para que en datos móviles no se quede colgado
+  return new Promise(async (resolve)=>{
+    let listo = false;
+    const t = setTimeout(()=>{ if(!listo){ listo=true; resolve(null); } }, ms||8000);
+    try{
+      const r = await fetch(url, opciones||{});
+      if(!listo){ listo=true; clearTimeout(t); resolve(r); }
+    }catch(e){ if(!listo){ listo=true; clearTimeout(t); resolve(null); } }
+  });
+}
+
 async function ccChequearActualizacion(manual){
   if(!CONFIG.apiVersion && !CONFIG.urlVersion){ if(manual) toast("Chequeo no configurado."); return; }
   let versionRemota = null;
@@ -3485,42 +3514,42 @@ async function ccChequearActualizacion(manual){
   let novedades = "";
   let dondeErr = "";
 
-  // 1) API de GitHub (la más confiable). Sin caché.
+  // 1) API de GitHub (la más confiable). Con timeout para datos móviles.
   if(CONFIG.apiVersion){
-    try{
-      const r = await fetch(CONFIG.apiVersion + "?_=" + Date.now(), {
-        method: "GET",
-        headers: { "Accept":"application/vnd.github+json" }
-      });
-      if(r.ok){
+    const r = await ccFetchConTimeout(CONFIG.apiVersion, {
+      method: "GET",
+      headers: { "Accept":"application/vnd.github+json" }
+    }, 8000);
+    if(r && r.ok){
+      try{
         const rel = await r.json();
         if(rel && rel.tag_name){
           versionRemota = String(rel.tag_name).replace(/^v/i,"");
           if(rel.body) novedades = rel.body;
         }
-      } else { dondeErr = "API código "+r.status; }
-    }catch(e){ dondeErr = "API sin conexión"; }
+      }catch(e){ dondeErr = "API respuesta rara"; }
+    } else { dondeErr = r ? ("API código "+r.status) : "API no respondió"; }
   }
 
   // 2) Respaldo: version.json directo (para novedades y URL del APK)
   if(CONFIG.urlVersion){
-    try{
-      const r2 = await fetch(CONFIG.urlVersion + "?_=" + Date.now(), {
-        method: "GET", headers: { "Cache-Control":"no-cache" }
-      });
-      if(r2.ok){
+    const r2 = await ccFetchConTimeout(CONFIG.urlVersion + "?_=" + Date.now(), {
+      method: "GET", headers: { "Cache-Control":"no-cache" }
+    }, 8000);
+    if(r2 && r2.ok){
+      try{
         const info = await r2.json();
         if(info){
           if(!versionRemota && info.version) versionRemota = String(info.version).replace(/^v/i,"");
           if(info.url) urlApk = info.url;
           if(info.novedades) novedades = info.novedades;
         }
-      }
-    }catch(e){}
+      }catch(e){}
+    }
   }
 
   if(!versionRemota){
-    if(manual) toast("No se pudo consultar" + (dondeErr ? " ("+dondeErr+")" : "") + ".");
+    if(manual) toast("No se pudo consultar" + (dondeErr ? " ("+dondeErr+")" : "") + ". Revisa tu conexión.");
     return;
   }
 
