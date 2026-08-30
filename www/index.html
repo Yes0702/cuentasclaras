@@ -636,6 +636,8 @@
         </div>
         <label id="newRubroCantLabel">% del sobrante</label>
         <input type="text" inputmode="decimal" id="newRubroCant" class="mono-input" placeholder="0" oninput="onCantInput(this,'newRubroModo')">
+        <label>Día del mes en que pagas esta obligación (opcional)</label>
+        <input type="number" min="1" max="31" id="newRubroDia" class="mono-input" placeholder="Ej: 5 (te avisa un día antes)">
         <div class="edit-actions">
           <button class="btn-primary" style="margin:0;" onclick="addCustomRubro()">Guardar rubro</button>
           <button class="btn-ghost" style="margin:0;" onclick="toggleAddRubro()">Cancelar</button>
@@ -860,7 +862,7 @@
       <div class="card" style="margin-top:12px;" id="cajaAlarmasDeuda">
         <div class="grupo-ing-head" onclick="toggleVerAlarmasDeuda()" style="cursor:pointer;">
           <div>
-            <div class="s-txt">🔔 Recordatorios de pago de deudas</div>
+            <div class="s-txt">🔔 Recordatorios de pago (deudas y rubros)</div>
             <div class="s-sub" id="alarmasDeudaSub">Toca para ver</div>
           </div>
           <span class="chev" id="chevAlarmasDeuda">▼</span>
@@ -1864,6 +1866,8 @@ function renderPresupuesto(){
             <div><label id="editCantLabel_${idx}">Cantidad ${r.modo==="valor"?"($)":"(%)"}</label><input type="text" inputmode="decimal" id="editCant_${idx}" class="mono-input" value="${r.modo==="valor"?r.valor.toLocaleString('es-CO'):r.pct}" oninput="onCantInput(this,'editModo_${idx}')"></div>
             <div><label>Prioridad de pago</label><input type="number" id="editPrio_${idx}" class="mono-input" value="${r.prioridad}"></div>
           </div>
+          <label>Día del mes en que pagas (recordatorio, opcional)</label>
+          <input type="number" min="1" max="31" id="editDia_${idx}" class="mono-input" value="${r.diaPago||""}" placeholder="Ej: 5">
           <div class="edit-actions">
             <button class="btn-primary" style="margin:0;" onclick="saveRubroEdit(${idx})">Guardar</button>
       ${esPendiente("rubro:"+idx)
@@ -2003,12 +2007,14 @@ function saveRubroEdit(idx){
   const modo = document.getElementById("editModo_"+idx).value;
   const cant = leerCantidad("editCant_"+idx, modo);
   const prioridad = parseInt(document.getElementById("editPrio_"+idx).value)||0;
+  const diaPago = parseInt(document.getElementById("editDia_"+idx).value)||0;
   if(!nombre){ toast("El rubro necesita un nombre."); return; }
   const oldNombre = state.rubros[idx].nombre;
   state.rubros[idx] = {
     nombre, tipo, prioridad, modo,
     valor: modo==="valor" ? cant : 0,
-    pct:   modo!=="valor" ? cant : 0
+    pct:   modo!=="valor" ? cant : 0,
+    diaPago
   };
   if(oldNombre !== nombre){
     state.gastos.forEach(g=>{ if(g.rubro===oldNombre) g.rubro = nombre; });
@@ -2017,6 +2023,7 @@ function saveRubroEdit(idx){
   editingRubroIdx = null;
   saveState();
   renderAll();
+  ccReprogramarNativoPronto();
   toast("Rubro actualizado");
 }
 
@@ -2050,19 +2057,23 @@ function addCustomRubro(){
   const tipo = document.getElementById("newRubroTipo").value;
   const modo = document.getElementById("newRubroModo").value;
   const cant = leerCantidad("newRubroCant", modo);
+  const diaPago = parseInt(document.getElementById("newRubroDia").value)||0;
   if(!nombre){ toast("Ponle un nombre al rubro."); return; }
   const maxPrio = state.rubros.reduce((m,r)=>Math.max(m,r.prioridad),0);
   state.rubros.push({
     nombre, tipo, prioridad:maxPrio+1, modo,
     valor: modo==="valor" ? cant : 0,
-    pct:   modo!=="valor" ? cant : 0
+    pct:   modo!=="valor" ? cant : 0,
+    diaPago
   });
   document.getElementById("newRubroNombre").value = "";
   document.getElementById("newRubroCant").value = "";
+  document.getElementById("newRubroDia").value = "";
   document.getElementById("addRubroPanel").style.display = "none";
   saveState();
   renderAll();
-  toast("Rubro agregado");
+  if(diaPago>0) ccReprogramarNativoPronto();
+  toast(diaPago>0 ? "Rubro agregado · te recordaré un día antes" : "Rubro agregado");
 }
 
 function normalizarPct(){
@@ -3811,7 +3822,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "7.5";
+const APP_VERSION = "7.6";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -4213,6 +4224,29 @@ async function ccReprogramarNativo(){
     }
   });
 
+  // Notificaciones de pago de RUBROS con día de pago (mismo esquema que deudas)
+  (state.rubros||[]).forEach((r, ri)=>{
+    if(!r.diaPago || r.diaPago<1) return;
+    if(lista.length >= CC_MAX_NOTIFS) return;
+    const hoy = new Date();
+    for(let m=0; m<3; m++){
+      if(lista.length >= CC_MAX_NOTIFS) break;
+      const diaPagoFecha = new Date(hoy.getFullYear(), hoy.getMonth()+m, r.diaPago, 9, 0, 0);
+      const aviso = new Date(diaPagoFecha.getTime() - 24*60*60*1000);
+      if(aviso > new Date()){
+        lista.push({
+          id: 800000 + ri*10 + m,   // rango propio para rubros
+          title: "📌 Pago programado mañana",
+          body: "Mañana toca pagar "+(r.nombre||"un rubro")+".",
+          channelId: "cc-recordatorios",
+          schedule: { at: aviso, allowWhileIdle: true },
+          smallIcon: "ic_launcher",
+          extra: { rubroNombre: r.nombre }
+        });
+      }
+    }
+  });
+
   if(!lista.length) return true;
   try{ await LN.schedule({ notifications: lista }); return true; }
   catch(e){ return false; }
@@ -4475,21 +4509,38 @@ function toggleVerAlarmasDeuda(){
 function renderAlarmasDeuda(){
   const sub = document.getElementById("alarmasDeudaSub");
   const box = document.getElementById("alarmasDeudaList");
-  const conRecordatorio = (state.deudas||[]).filter(d=>d.diaPago>0 && d.saldo>0);
-  if(sub) sub.textContent = conRecordatorio.length ? conRecordatorio.length+" recordatorio(s) activo(s)" : "No hay recordatorios de deuda";
+  const deudasR = (state.deudas||[]).filter(d=>d.diaPago>0 && d.saldo>0);
+  const rubrosR = (state.rubros||[]).filter(r=>r.diaPago>0);
+  const total = deudasR.length + rubrosR.length;
+  if(sub) sub.textContent = total ? total+" recordatorio(s) activo(s)" : "No hay recordatorios de pago";
   if(!box || !verAlarmasDeuda) return;
-  if(conRecordatorio.length===0){
-    box.innerHTML = `<div class="empty-state">No tienes recordatorios de pago. Agrega el "día del mes en que pagas" al crear o editar una deuda.</div>`;
+  if(total===0){
+    box.innerHTML = `<div class="empty-state">No tienes recordatorios de pago. Agrega el "día del mes en que pagas" al crear o editar una deuda o un rubro.</div>`;
     return;
   }
-  box.innerHTML = conRecordatorio.map(d=>`
-    <div class="fijo-row">
-      <div style="flex:1; min-width:0;">
-        <div class="s-txt">💳 ${esc(d.nombre)}</div>
-        <div class="s-sub">Te avisa el día ${d.diaPago-1>0?d.diaPago-1:"anterior"} (un día antes del ${d.diaPago})</div>
-      </div>
-    </div>`).join("") +
-    `<div class="hint" style="margin-top:8px;">Estos avisos llegan un día antes de la fecha de pago. Edita el día en la pestaña Deudas.</div>`;
+  let html = "";
+  if(deudasR.length){
+    html += `<div class="s-sub" style="font-weight:700; margin:2px 0 6px; color:var(--brand-dark);">Deudas</div>`;
+    html += deudasR.map(d=>`
+      <div class="fijo-row">
+        <div style="flex:1; min-width:0;">
+          <div class="s-txt">💳 ${esc(d.nombre)}</div>
+          <div class="s-sub">Te avisa un día antes del ${d.diaPago}</div>
+        </div>
+      </div>`).join("");
+  }
+  if(rubrosR.length){
+    html += `<div class="s-sub" style="font-weight:700; margin:10px 0 6px; color:var(--brand-dark);">Rubros del presupuesto</div>`;
+    html += rubrosR.map(r=>`
+      <div class="fijo-row">
+        <div style="flex:1; min-width:0;">
+          <div class="s-txt">📌 ${esc(r.nombre)}</div>
+          <div class="s-sub">Te avisa un día antes del ${r.diaPago}</div>
+        </div>
+      </div>`).join("");
+  }
+  html += `<div class="hint" style="margin-top:8px;">Estos avisos llegan un día antes de cada fecha. Edita el día en la deuda o el rubro.</div>`;
+  box.innerHTML = html;
 }
 
 function renderEstadosAlarmas(){
