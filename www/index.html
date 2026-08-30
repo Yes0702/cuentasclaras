@@ -696,7 +696,10 @@
 
       <h2 class="section-title">Historial de <span id="histMesLabel"></span><div class="rule"></div></h2>
       <div class="filter-row">
-        <select id="filtroRubro"><option value="Todos">Todos los rubros</option></select>
+        <div style="position:relative; flex:1 1 100%;">
+          <select id="filtroRubro" style="width:100%; appearance:none; -webkit-appearance:none; padding-right:40px;"><option value="Todos">Todos los rubros</option></select>
+          <span style="position:absolute; right:14px; top:50%; transform:translateY(-50%); pointer-events:none; font-size:18px; color:var(--brand-dark);">▾</span>
+        </div>
         <select id="filtroAnio" style="display:none;"></select>
         <select id="filtroMes" style="display:none;"></select>
       </div>
@@ -707,7 +710,7 @@
           <div style="color:#fff; font-size:14.5px; font-weight:800;">📊 Presupuestado vs. real por rubro</div>
           <div style="color:rgba(255,255,255,.9); font-size:12px; margin-top:2px;">Toca para ver cuánto planeaste y cuánto gastaste</div>
         </div>
-        <span id="chevResumen" style="color:#fff; font-size:16px;">▾</span>
+        <span id="chevResumen" style="color:#fff; font-size:22px; font-weight:bold;">▾</span>
       </div>
       <div id="resumenBox" style="display:none;">
         <div class="card" style="padding:12px;"><div id="resumenList"></div></div>
@@ -759,6 +762,8 @@
         <input type="text" inputmode="numeric" id="dPago" class="mono-input" placeholder="0">
         <label>% de interés anual que te cobran (opcional)</label>
         <input type="text" inputmode="decimal" id="dTasa" class="mono-input" placeholder="Ej: 24">
+        <label>Día del mes en que pagas (opcional, para recordatorio)</label>
+        <input type="number" min="1" max="31" id="dDiaPago" class="mono-input" placeholder="Ej: 5 (te avisa un día antes)">
         <label>Fecha objetivo de pago (opcional)</label>
         <input type="date" id="dFecha" onchange="onFechaDeudaChange()">
         <label>O meses para pagarla (opcional, calcula el pago sugerido)</label>
@@ -851,6 +856,17 @@
       <div id="alarmasList"></div>
       <button class="add-row-btn" onclick="agregarAlarma()">+ Agregar otra alarma</button>
       <div class="hint" style="margin-top:10px;">Puedes activar varias alarmas a la vez (por ejemplo una diaria y otra semanal). <b>Para que los avisos lleguen con la app cerrada:</b> instálala desde Chrome en el celular (menú ⋮ → “Instalar app”), dale permiso de notificaciones, y en Ajustes de Android quítale la optimización de batería a la app. Si tu celular no soporta alarmas exactas en segundo plano, igual verás el aviso pendiente apenas abras la app.</div>
+
+      <div class="card" style="margin-top:12px;" id="cajaAlarmasDeuda">
+        <div class="grupo-ing-head" onclick="toggleVerAlarmasDeuda()" style="cursor:pointer;">
+          <div>
+            <div class="s-txt">🔔 Recordatorios de pago de deudas</div>
+            <div class="s-sub" id="alarmasDeudaSub">Toca para ver</div>
+          </div>
+          <span class="chev" id="chevAlarmasDeuda">▼</span>
+        </div>
+        <div id="alarmasDeudaList" style="display:none; margin-top:10px;"></div>
+      </div>
 
       <h2 class="section-title" id="secContacto">Sugerencias<div class="rule"></div></h2>
       <div class="card">
@@ -2990,14 +3006,16 @@ function addDeuda(){
   const mesesObjetivo = parseInt(document.getElementById("dMeses").value)||0;
   const tasaEl = document.getElementById("dTasa");
   const tasaAnual = tasaEl ? (parseFloat(String(tasaEl.value).replace(",","."))||0) : 0;
+  const diaPago = parseInt(document.getElementById("dDiaPago").value)||0;
   if(!nombre || inicial<=0 || pago<=0){ toast("Completa nombre, deuda inicial y pago mensual."); return; }
-  state.deudas.push({id:uid(), nombre, inicial, saldo, pago, fecha, mesesObjetivo, tasaAnual, interesPagado:0});
-  ["dNombre","dInicial","dSaldo","dPago","dTasa","dFecha","dMeses"].forEach(id=>document.getElementById(id).value="");
+  state.deudas.push({id:uid(), nombre, inicial, saldo, pago, fecha, mesesObjetivo, tasaAnual, interesPagado:0, diaPago});
+  ["dNombre","dInicial","dSaldo","dPago","dTasa","dDiaPago","dFecha","dMeses"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("deudaPagoHint").textContent = "";
   saveState();
   renderDeudas();
   renderDashboard();
-  toast("Deuda agregada");
+  if(diaPago>0) ccReprogramarNativoPronto();
+  toast(diaPago>0 ? "Deuda agregada · te recordaré un día antes" : "Deuda agregada");
 }
 let abonandoDeudaId = null;
 /* ===== Cálculos de amortización para ABONO A CAPITAL ===== */
@@ -3163,12 +3181,15 @@ function saveDeudaEdit(id){
   d.pago = numFromMasked("edP_"+id);
   const edT = document.getElementById("edT_"+id);
   if(edT) d.tasaAnual = parseFloat(String(edT.value).replace(",","."))||0;
+  const edDia = document.getElementById("edDia_"+id);
+  if(edDia) d.diaPago = parseInt(edDia.value)||0;
   d.fecha = document.getElementById("edF_"+id).value;
   d.mesesObjetivo = parseInt(document.getElementById("edM_"+id).value)||0;
   editingDeudaId = null;
   saveState();
   renderDeudas();
   renderDashboard();
+  ccReprogramarNativoPronto();
 }
 function onFechaDeudaEditChange(id){
   const meses = mesesHastaFecha(document.getElementById("edF_"+id).value);
@@ -3207,6 +3228,8 @@ function renderDeudas(){
         <input type="text" inputmode="numeric" id="edP_${d.id}" class="mono-input" value="${d.pago.toLocaleString('es-CO')}">
         <label>% de interés anual (opcional)</label>
         <input type="text" inputmode="decimal" id="edT_${d.id}" class="mono-input" value="${d.tasaAnual||""}">
+        <label>Día del mes en que pagas (recordatorio)</label>
+        <input type="number" min="1" max="31" id="edDia_${d.id}" class="mono-input" value="${d.diaPago||""}" placeholder="Ej: 5">
         <label>Fecha objetivo de pago (opcional)</label>
         <input type="date" id="edF_${d.id}" value="${d.fecha||""}" onchange="onFechaDeudaEditChange('${d.id}')">
         <label>O meses para pagarla (opcional, calcula el pago sugerido)</label>
@@ -3788,7 +3811,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "7.4";
+const APP_VERSION = "7.5";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -4162,6 +4185,34 @@ async function ccReprogramarNativo(){
     }
   });
 
+  // Notificaciones de pago de deudas: un día antes del día de pago
+  (state.deudas||[]).forEach((d, di)=>{
+    if(!d.diaPago || d.diaPago<1 || d.saldo<=0) return;
+    if(lista.length >= CC_MAX_NOTIFS) return;
+    // próximas 3 ocurrencias (este mes y siguientes)
+    const hoy = new Date();
+    for(let m=0; m<3; m++){
+      if(lista.length >= CC_MAX_NOTIFS) break;
+      const anio = hoy.getFullYear();
+      const mes = hoy.getMonth() + m;
+      // día de pago de ese mes
+      const diaPagoFecha = new Date(anio, mes, d.diaPago, 9, 0, 0);
+      // un día antes, a las 9am
+      const aviso = new Date(diaPagoFecha.getTime() - 24*60*60*1000);
+      if(aviso > new Date()){
+        lista.push({
+          id: 900000 + di*10 + m,   // rango propio para no chocar con las otras
+          title: "💳 Pago de deuda mañana",
+          body: "Mañana debes pagar "+(d.nombre||"tu deuda")+" ("+money(d.pago||0)+").",
+          channelId: "cc-recordatorios",
+          schedule: { at: aviso, allowWhileIdle: true },
+          smallIcon: "ic_launcher",
+          extra: { deudaId: d.id }
+        });
+      }
+    }
+  });
+
   if(!lista.length) return true;
   try{ await LN.schedule({ notifications: lista }); return true; }
   catch(e){ return false; }
@@ -4412,7 +4463,37 @@ function textoEstadoAlarma(a){
     : "";
   return txt;
 }
+let verAlarmasDeuda = false;
+function toggleVerAlarmasDeuda(){
+  verAlarmasDeuda = !verAlarmasDeuda;
+  const box = document.getElementById("alarmasDeudaList");
+  const chev = document.getElementById("chevAlarmasDeuda");
+  if(box) box.style.display = verAlarmasDeuda ? "block" : "none";
+  if(chev) chev.textContent = verAlarmasDeuda ? "▲" : "▼";
+  renderAlarmasDeuda();
+}
+function renderAlarmasDeuda(){
+  const sub = document.getElementById("alarmasDeudaSub");
+  const box = document.getElementById("alarmasDeudaList");
+  const conRecordatorio = (state.deudas||[]).filter(d=>d.diaPago>0 && d.saldo>0);
+  if(sub) sub.textContent = conRecordatorio.length ? conRecordatorio.length+" recordatorio(s) activo(s)" : "No hay recordatorios de deuda";
+  if(!box || !verAlarmasDeuda) return;
+  if(conRecordatorio.length===0){
+    box.innerHTML = `<div class="empty-state">No tienes recordatorios de pago. Agrega el "día del mes en que pagas" al crear o editar una deuda.</div>`;
+    return;
+  }
+  box.innerHTML = conRecordatorio.map(d=>`
+    <div class="fijo-row">
+      <div style="flex:1; min-width:0;">
+        <div class="s-txt">💳 ${esc(d.nombre)}</div>
+        <div class="s-sub">Te avisa el día ${d.diaPago-1>0?d.diaPago-1:"anterior"} (un día antes del ${d.diaPago})</div>
+      </div>
+    </div>`).join("") +
+    `<div class="hint" style="margin-top:8px;">Estos avisos llegan un día antes de la fecha de pago. Edita el día en la pestaña Deudas.</div>`;
+}
+
 function renderEstadosAlarmas(){
+  renderAlarmasDeuda();
   const permiso = ("Notification" in window) ? Notification.permission : "unsupported";
   const permEl = document.getElementById("alarmaPermisoEstado");
   const introEl = document.getElementById("alarmaIntro");
