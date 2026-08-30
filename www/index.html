@@ -476,6 +476,7 @@
     <div class="topbar-row">
       <div class="cc-headbox" id="ccHeadbox">
         <div class="hb-label" id="hbLabel">Ingreso mensual</div>
+        <img id="hbLogo" src="icons/breb-logo.png" alt="Bre-B" style="display:none; height:30px; width:auto; background:#fff; padding:4px 8px; border-radius:8px; margin-top:3px;">
         <div class="hb-value" id="topIngreso">$0</div>
         <div id="topIngresoEjemplo" style="display:none; font-size:10.5px; color:rgba(255,255,255,.9); margin-top:2px; font-weight:600;">Ejemplo · edítalo en Presupuesto</div>
         <div id="hbExtra" style="display:none; font-size:11px; color:rgba(255,255,255,.9); margin-top:3px; line-height:1.35;"></div>
@@ -1313,9 +1314,12 @@ function renderTopbar(){
   const valEl = document.getElementById("topIngreso");
   const topEj = document.getElementById("topIngresoEjemplo");
   const extra = document.getElementById("hbExtra");
+  const logo = document.getElementById("hbLogo");
   if(topEj) topEj.style.display = "none";
   if(extra){ extra.style.display = "none"; extra.innerHTML = ""; }
   if(valEl) valEl.style.fontSize = "";
+  if(logo) logo.style.display = "none";
+  if(valEl) valEl.style.display = "";
   if(box){ box.classList.remove("clickable"); box.onclick = null; }
 
   if(ccVistaActual === "deudas"){
@@ -1336,7 +1340,8 @@ function renderTopbar(){
     }
   } else if(ccVistaActual === "inicio"){
     lblEl.textContent = "Apoya la app 💚";
-    valEl.textContent = "Bre-B";
+    if(logo) logo.style.display = "block";
+    if(valEl) valEl.style.display = "none";   // en vez del texto, mostramos el logo
     if(extra){
       extra.style.display = "block";
       extra.textContent = "Toca para donar por Bre-B →";
@@ -3899,7 +3904,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "8.1";
+const APP_VERSION = "8.2";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
