@@ -231,6 +231,12 @@
   .deuda-presu-card .dp-sub{ font-size:11.5px; color:#9A6B33; margin-top:2px; }
   .deuda-presu-card .dp-monto{ font-family:var(--font-mono); font-size:15px; font-weight:800; color:#7A4A18; white-space:nowrap; }
   .deuda-presu-card .dp-monto span{ font-size:10px; font-weight:600; opacity:.7; }
+  .deuda-presu-card .dp-edita{ font-size:10.5px; color:#B07A3D; margin-top:4px; font-weight:600; }
+  .btn-modo-abono{
+    flex:1; padding:9px 8px; border:1.5px solid var(--line); background:#fff; color:var(--ink-soft);
+    border-radius:10px; font-size:12px; font-weight:700; cursor:pointer; transition:all .15s;
+  }
+  .btn-modo-abono.activo{ border-color:var(--brand-dark); background:var(--brand-soft); color:var(--brand-dark); }
   .group-box{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;}
   .rubro-row{
     display:grid; grid-template-columns:1fr minmax(84px,auto) minmax(72px,auto); gap:8px; align-items:center;
@@ -667,6 +673,17 @@
           <span class="chev" id="chevGastosFijos">▼</span>
         </div>
         <div id="gastosFijosList" style="display:none; margin-top:10px;"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px;">
+        <div class="grupo-ing-head" onclick="toggleVerPagoDeudas()" style="cursor:pointer;">
+          <div>
+            <div class="s-txt">💳 Registrar pago de deudas</div>
+            <div class="s-sub">Escribe cuánto pagaste y calcula capital e interés</div>
+          </div>
+          <span class="chev" id="chevPagoDeudas">▼</span>
+        </div>
+        <div id="pagoDeudasList" style="display:none; margin-top:10px;"></div>
       </div>
 
       <h2 class="section-title">Comparativo por rubro<div class="rule"></div></h2>
@@ -1857,6 +1874,7 @@ function renderPresupuesto(){
           <div style="flex:1; min-width:0;">
             <div class="dp-nombre">💳 ${esc(d.nombre)}</div>
             <div class="dp-sub">Saldo: ${money(d.saldo)}${d.tasaAnual>0 ? " · "+d.tasaAnual+"% anual" : ""}</div>
+            <div class="dp-edita">✎ Edítala en la pestaña Deudas</div>
           </div>
           <div class="dp-monto">${money(d.pago||0)}<span>/mes</span></div>`;
         card.onclick = ()=> showView("deudas");
@@ -2126,6 +2144,138 @@ function addGasto(){
   toast("Gasto registrado ✓");
 }
 
+/* ===== Registrar pago de deudas desde Gastos (Etapa 2) ===== */
+let verPagoDeudas = false;
+function toggleVerPagoDeudas(){
+  verPagoDeudas = !verPagoDeudas;
+  const box = document.getElementById("pagoDeudasList");
+  const chev = document.getElementById("chevPagoDeudas");
+  if(box) box.style.display = verPagoDeudas ? "block" : "none";
+  if(chev) chev.textContent = verPagoDeudas ? "▲" : "▼";
+  if(verPagoDeudas) renderPagoDeudas();
+}
+
+function renderPagoDeudas(){
+  const box = document.getElementById("pagoDeudasList");
+  if(!box) return;
+  const deudas = state.deudas.filter(d=>d.saldo>0);
+  if(deudas.length===0){
+    box.innerHTML = `<div class="empty-state">No tienes deudas activas. Créalas en la pestaña Deudas.</div>`;
+    return;
+  }
+  box.innerHTML =
+    `<div style="padding:11px 13px; background:#FFF4E6; border:1px solid #F0D8A8; border-radius:11px; margin-bottom:12px;">
+       <div style="font-size:12.5px; color:#8A5A1F; font-weight:600; line-height:1.45;">
+         💳 Escribe cuánto pagaste este mes a cada deuda. La app calcula cuánto va a capital y cuánto a interés, y actualiza el saldo.
+       </div>
+     </div>` +
+    deudas.map(d=>{
+      const yaPago = state.gastos.find(g=> g.origenDeuda===d.id && g.mes===state.mesActivo && g.anio===state.anioActivo);
+      const sugerido = d.pago || 0;
+      const interesMes = Math.round(d.saldo * ((d.tasaAnual||0)/100/12));
+      return `
+      <div class="fijo-row ${yaPago?"pagado":""}" style="flex-direction:column; align-items:stretch;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="flex:1; min-width:0;">
+            <div class="s-txt">💳 ${esc(d.nombre)}</div>
+            <div class="s-sub">Saldo: ${money(d.saldo)}${d.tasaAnual>0?" · interés del mes ~"+money(interesMes):""}</div>
+          </div>
+        </div>
+        ${yaPago
+          ? `<div class="s-sub" style="color:var(--brand-dark); font-weight:600; margin-top:6px;">✓ Pagaste ${money(yaPago.monto)} este mes
+               <button class="btn-ghost" style="margin:6px 0 0; padding:6px 10px; font-size:12px;" onclick="deshacerPagoDeuda('${yaPago.id}','${d.id}')">Deshacer</button>
+             </div>`
+          : `<div style="display:flex; gap:8px; margin-top:8px;">
+               <input type="text" inputmode="numeric" id="pagoDeudaInput_${d.id}" class="mono-input" placeholder="${sugerido? money(sugerido).replace('$','') : 'Monto'}" style="flex:1;" oninput="ccPreviewPagoDeuda('${d.id}')">
+               <button class="btn-primary" style="margin:0; flex:0 0 auto;" onclick="registrarPagoDeuda('${d.id}')">Registrar</button>
+             </div>
+             <div class="hint" id="pagoDeudaPreview_${d.id}" style="margin-top:6px;"></div>`}
+      </div>`;
+    }).join("");
+  deudas.forEach(d=>{ const el=document.getElementById("pagoDeudaInput_"+d.id); if(el) maskMiles(el); });
+}
+
+function ccPreviewPagoDeuda(id){
+  const d = state.deudas.find(x=>x.id===id);
+  const el = document.getElementById("pagoDeudaPreview_"+id);
+  if(!d || !el) return;
+  const monto = numFromMasked("pagoDeudaInput_"+id);
+  if(monto<=0){ el.textContent = ""; return; }
+  const interesMes = Math.round(d.saldo * ((d.tasaAnual||0)/100/12));
+  if((d.tasaAnual||0)<=0){
+    el.innerHTML = `Todo el pago (${money(monto)}) va a capital.`;
+    el.style.color = "";
+    return;
+  }
+  const aCapital = monto - interesMes;
+  if(aCapital<=0){
+    el.innerHTML = `⚠ Con ${money(monto)} no cubres el interés (~${money(interesMes)}). La deuda subiría.`;
+    el.style.color = "#C0392B";
+  }else{
+    el.innerHTML = `De ${money(monto)}: <b>${money(aCapital)}</b> a capital · <b>${money(interesMes)}</b> a interés (aprox.).`;
+    el.style.color = "";
+  }
+}
+
+function registrarPagoDeuda(id){
+  const d = state.deudas.find(x=>x.id===id);
+  if(!d) return;
+  const monto = numFromMasked("pagoDeudaInput_"+id);
+  if(monto<=0){ toast("Escribe cuánto pagaste."); return; }
+
+  // Mismo cálculo de interés/capital que el abono en la pestaña Deudas
+  const tasaMensual = (d.tasaAnual||0)/100/12;
+  const interesMes = Math.round(d.saldo * tasaMensual);
+  const aCapital = monto - interesMes;
+  if(tasaMensual>0){
+    if(aCapital<=0){
+      d.saldo = d.saldo + (interesMes - monto);
+      d.interesPagado = (d.interesPagado||0) + monto;
+    }else{
+      d.saldo = Math.max(0, d.saldo - aCapital);
+      d.interesPagado = (d.interesPagado||0) + interesMes;
+    }
+  }else{
+    d.saldo = Math.max(0, d.saldo - monto);
+  }
+
+  // Registrar como gasto del mes (para que aparezca en el historial), marcado con origenDeuda
+  state.gastos.push({
+    id: uid(), fecha: new Date(state.anioActivo, MESES.indexOf(state.mesActivo), Math.min(new Date().getDate(),28)).toISOString().slice(0,10),
+    mes: state.mesActivo, anio: state.anioActivo,
+    rubro: "Pago de deuda: "+d.nombre, monto: monto, nota: "Pago de deuda",
+    origenDeuda: d.id
+  });
+
+  saveState();
+  renderPagoDeudas();
+  renderGastos();
+  renderDeudas();
+  renderDashboard();
+  toast(tasaMensual>0 && aCapital>0
+    ? "Pago: "+money(aCapital)+" a capital · "+money(interesMes)+" a interés"
+    : "Pago registrado");
+}
+
+function deshacerPagoDeuda(gastoId, deudaId){
+  const g = state.gastos.find(x=>x.id===gastoId);
+  const d = state.deudas.find(x=>x.id===deudaId);
+  if(!g || !d) return;
+  // Revertir el efecto en el saldo (aproximado: devolver el capital que se abonó)
+  const tasaMensual = (d.tasaAnual||0)/100/12;
+  const interesMes = Math.round((d.saldo) * tasaMensual); // aprox del momento actual
+  const aCapital = g.monto - interesMes;
+  if(tasaMensual>0 && aCapital>0){ d.saldo = d.saldo + aCapital; }
+  else { d.saldo = d.saldo + g.monto; }
+  state.gastos = state.gastos.filter(x=>x.id!==gastoId);
+  saveState();
+  renderPagoDeudas();
+  renderGastos();
+  renderDeudas();
+  renderDashboard();
+  toast("Pago deshecho");
+}
+
 function deleteGasto(id){
   state.gastos = state.gastos.filter(g=>g.id!==id);
   saveState();
@@ -2142,6 +2292,7 @@ function toggleVerGastosFijos(){
   if(box) box.style.display = verGastosFijos ? "block" : "none";
   if(chev) chev.textContent = verGastosFijos ? "▲" : "▼";
   if(verGastosFijos) renderGastosFijos();
+  if(verPagoDeudas) renderPagoDeudas();
 }
 
 /* Busca si un rubro fijo ya está registrado como gasto en el mes activo */
@@ -2237,6 +2388,7 @@ function renderGastos(){
   fillMesAnioSelects();
   if(ccSyncFiltroPendiente){ sincronizarFiltrosGastos(); ccSyncFiltroPendiente = false; }
   if(verGastosFijos) renderGastosFijos();
+  if(verPagoDeudas) renderPagoDeudas();
 
   // El mes y año los manda SIEMPRE el selector de arriba (los filtros ocultos se sincronizan)
   const anioF = String(state.anioActivo);
@@ -2842,55 +2994,149 @@ function addDeuda(){
   toast("Deuda agregada");
 }
 let abonandoDeudaId = null;
+/* ===== Cálculos de amortización para ABONO A CAPITAL ===== */
+function ccMesesReal(saldo, cuota, i){
+  if(saldo<=0) return 0;
+  if(i<=0) return cuota>0 ? saldo/cuota : Infinity;
+  if(cuota <= saldo*i) return Infinity; // la cuota no cubre el interés
+  return -Math.log(1 - (i*saldo)/cuota) / Math.log(1+i);
+}
+function ccInteresTotal(saldo, cuota, i){
+  const n = ccMesesReal(saldo, cuota, i);
+  if(!isFinite(n)) return Infinity;
+  return Math.max(0, (cuota * n) - saldo);
+}
+/* Devuelve el ahorro estimado en intereses al abonar a capital.
+   modo: "tiempo" (misma cuota, termina antes) o "cuota" (mismo plazo, cuota menor) */
+function ccAhorroAbono(d, abono, modo){
+  const i = (d.tasaAnual||0)/100/12;
+  const cuota = d.pago||0;
+  const saldo = d.saldo||0;
+  if(i<=0 || cuota<=0 || abono<=0 || abono>=saldo){
+    return { ahorro:0, detalle:"", nuevaCuota:cuota };
+  }
+  const intOrig = ccInteresTotal(saldo, cuota, i);
+  const nuevoSaldo = saldo - abono;
+  if(modo==="cuota"){
+    const nOrig = ccMesesReal(saldo, cuota, i);
+    if(!isFinite(nOrig)) return { ahorro:0, detalle:"", nuevaCuota:cuota };
+    const cuotaNueva = (nuevoSaldo * i) / (1 - Math.pow(1+i, -nOrig));
+    const intNuevo = Math.max(0, (cuotaNueva * nOrig) - nuevoSaldo);
+    return {
+      ahorro: Math.max(0, Math.round(intOrig - intNuevo)),
+      nuevaCuota: Math.round(cuotaNueva),
+      detalle: "Tu cuota bajaría a "+money(Math.round(cuotaNueva))+" (mismo plazo)."
+    };
+  } else {
+    const intNuevo = ccInteresTotal(nuevoSaldo, cuota, i);
+    const nOrig = ccMesesReal(saldo, cuota, i);
+    const nNuevo = ccMesesReal(nuevoSaldo, cuota, i);
+    const mesesMenos = (isFinite(nOrig)&&isFinite(nNuevo)) ? Math.round(nOrig-nNuevo) : 0;
+    return {
+      ahorro: Math.max(0, Math.round(intOrig - intNuevo)),
+      nuevaCuota: cuota,
+      detalle: "Terminarías "+mesesMenos+" mes"+(mesesMenos===1?"":"es")+" antes (misma cuota)."
+    };
+  }
+}
+
+let ccModoAbono = {};  // guarda el modo elegido por deuda: "tiempo" o "cuota"
+function ccSetModoAbono(id, modo){
+  ccModoAbono[id] = modo;
+  const bT = document.getElementById("modoTiempo_"+id);
+  const bC = document.getElementById("modoCuota_"+id);
+  if(bT) bT.classList.toggle("activo", modo==="tiempo");
+  if(bC) bC.classList.toggle("activo", modo==="cuota");
+  ccPreviewAbono(id);
+}
+
 function ccPreviewAbono(id){
   const d = state.deudas.find(x=>x.id===id);
   if(!d) return;
+  const inp = document.getElementById("abonoDeudaInput_"+id);
+  if(inp) maskMiles(inp);
   const el = document.getElementById("abonoPreview_"+id);
-  if(el){ maskMiles(document.getElementById("abonoDeudaInput_"+id)); }
-  if(!el || !(d.tasaAnual>0)) return;
+  if(!el) return;
   const monto = numFromMasked("abonoDeudaInput_"+id);
-  if(monto<=0){ el.textContent = "Escribe el monto para ver cuánto va a capital y cuánto a interés."; return; }
-  const interesMes = Math.round(d.saldo * (d.tasaAnual/100/12));
-  const aCapital = monto - interesMes;
-  if(aCapital<=0){
-    el.innerHTML = `⚠ Con ${money(monto)} no alcanzas a cubrir el interés (~${money(interesMes)}). La deuda subiría.`;
-    el.style.color = "#C0392B";
-  }else{
-    el.innerHTML = `De ${money(monto)}: <b>${money(aCapital)}</b> a capital · <b>${money(interesMes)}</b> a interés (aprox.).`;
+  if(monto<=0){ el.innerHTML = (d.tasaAnual>0?"Escribe el monto para ver tu ahorro.":""); el.style.color=""; return; }
+  if(monto>=d.saldo){
+    el.innerHTML = `Con ${money(monto)} pagarías toda la deuda (saldo ${money(d.saldo)}).`;
     el.style.color = "";
+    return;
   }
+  if(!(d.tasaAnual>0)){
+    el.innerHTML = `Todo el abono (${money(monto)}) baja directo tu deuda.`;
+    return;
+  }
+  const modo = ccModoAbono[id] || "tiempo";
+  const r = ccAhorroAbono(d, monto, modo);
+  el.innerHTML = `Nuevo saldo: <b>${money(d.saldo-monto)}</b>. ${r.detalle} Ahorro estimado en intereses: <b>${money(r.ahorro)}</b> (aprox.).`;
+  el.style.color = "";
 }
-function confirmarAbonoDeuda(id){
+
+/* Muestra un mensaje central grande explicando el abono a capital y pide aceptar */
+function pedirConfirmarAbonoCapital(id){
   const d = state.deudas.find(x=>x.id===id);
   if(!d) return;
   const monto = numFromMasked("abonoDeudaInput_"+id);
-  if(monto<=0){ toast("Ingresa un monto mayor a cero."); return; }
+  if(monto<=0){ toast("Escribe cuánto vas a abonar."); return; }
+  if(monto>d.saldo){ toast("El abono no puede ser mayor al saldo."); return; }
+  const modo = ccModoAbono[id] || "tiempo";
+  const r = ccAhorroAbono(d, monto, modo);
 
-  const tasaMensual = (d.tasaAnual||0)/100/12;
-  const interesMes = Math.round(d.saldo * tasaMensual);   // interés que genera el saldo este mes
-  const aCapital = monto - interesMes;                    // lo que de verdad baja la deuda
+  const overlay = document.createElement("div");
+  overlay.id = "modalAbonoCapital";
+  overlay.style.cssText = "position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:24px;";
+  overlay.innerHTML = `
+    <div style="background:#fff; border-radius:20px; padding:24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+      <div style="font-size:44px; margin-bottom:8px;">💰</div>
+      <div style="font-size:18px; font-weight:800; color:var(--brand-dark); margin-bottom:10px;">Abono directo a capital</div>
+      <div style="font-size:13.5px; color:var(--ink); line-height:1.55; margin-bottom:8px;">
+        Estás por abonar <b>${money(monto)}</b> directamente al capital de <b>${esc(d.nombre)}</b>.
+        Todo el dinero baja tu deuda, sin pagar interés por este abono.
+      </div>
+      ${d.tasaAnual>0 ? `<div style="font-size:12.5px; color:var(--ink-soft); line-height:1.5; margin-bottom:16px; padding:10px; background:var(--brand-soft); border-radius:10px;">
+        ${r.detalle}<br>Ahorro estimado en intereses: <b style="color:var(--brand-dark);">${money(r.ahorro)}</b> (aprox.).
+      </div>` : `<div style="margin-bottom:16px;"></div>`}
+      <div style="display:flex; gap:10px;">
+        <button onclick="ccCerrarModalAbono()" style="flex:1; background:#EEF1F3; color:var(--ink); border:none; border-radius:12px; padding:13px; font-weight:700; cursor:pointer;">Cancelar</button>
+        <button onclick="ccEjecutarAbonoCapital('${id}')" style="flex:1.4; background:var(--brand-dark); color:#fff; border:none; border-radius:12px; padding:13px; font-weight:800; cursor:pointer;">Sí, abonar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function ccCerrarModalAbono(){
+  const m = document.getElementById("modalAbonoCapital");
+  if(m) m.remove();
+}
+function ccEjecutarAbonoCapital(id){
+  const d = state.deudas.find(x=>x.id===id);
+  if(!d){ ccCerrarModalAbono(); return; }
+  const monto = numFromMasked("abonoDeudaInput_"+id);
+  const fecha = (document.getElementById("abonoFecha_"+id)||{}).value || new Date().toISOString().slice(0,10);
+  const modo = ccModoAbono[id] || "tiempo";
+  const r = ccAhorroAbono(d, monto, modo);
 
-  if(tasaMensual>0){
-    if(aCapital <= 0){
-      // El pago no alcanza a cubrir el interés: la deuda crece
-      const nuevoInteres = interesMes - monto;
-      d.saldo = d.saldo + nuevoInteres;
-      d.interesPagado = (d.interesPagado||0) + monto;
-      toast("⚠ Tu pago no cubre el interés. La deuda subió "+money(nuevoInteres)+".");
-    } else {
-      d.saldo = Math.max(0, d.saldo - aCapital);
-      d.interesPagado = (d.interesPagado||0) + interesMes;
-      toast("Abono: "+money(aCapital)+" a capital · "+money(interesMes)+" a interés (aprox.)");
-    }
-  } else {
-    // Sin tasa: todo el pago baja el capital (como antes)
-    d.saldo = Math.max(0, d.saldo - monto);
-    toast("Abono registrado");
+  // Abono a capital: TODO baja la deuda
+  d.saldo = Math.max(0, d.saldo - monto);
+  // Si eligió reducir cuota, actualizar el pago mensual
+  if(modo==="cuota" && r.nuevaCuota>0 && d.tasaAnual>0){
+    d.pago = r.nuevaCuota;
   }
+  // Guardar historial de abonos a capital
+  if(!Array.isArray(d.abonosCapital)) d.abonosCapital = [];
+  d.abonosCapital.push({ fecha, monto, modo, ahorro: r.ahorro });
+
+  ccCerrarModalAbono();
   abonandoDeudaId = null;
+  ccModoAbono = {};
   saveState();
   renderDeudas();
   renderDashboard();
+  // Mensaje motivador
+  setTimeout(()=>{
+    toast(d.tasaAnual>0 && r.ahorro>0 ? "¡Buena decisión! Te ahorras ~"+money(r.ahorro)+" 🎉" : "Abono a capital registrado ✓");
+  }, 200);
 }
 function deleteDeuda(id){
   limpiarPendiente("deuda:"+id);
@@ -2990,15 +3236,26 @@ function renderDeudas(){
         <div class="bar-track"><div class="bar-fill ${barClass}" style="width:${pctPagado}%"></div></div>
       </div>
       ${abonandoDeudaId===d.id
-        ? `<div onclick="event.stopPropagation();">
-             <input type="text" inputmode="numeric" id="abonoDeudaInput_${d.id}" class="mono-input" placeholder="Monto del abono" style="margin-bottom:6px;" oninput="ccPreviewAbono('${d.id}')">
-             ${d.tasaAnual>0 ? `<div class="hint" id="abonoPreview_${d.id}" style="margin-bottom:8px;">Escribe el monto para ver cuánto va a capital y cuánto a interés.</div>` : ""}
+        ? `<div onclick="event.stopPropagation();" style="background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px; margin-top:4px;">
+             <div style="font-size:12.5px; font-weight:700; color:var(--brand-dark); margin-bottom:8px;">💰 Abono directo a capital</div>
+             <label style="font-size:11.5px;">Monto del abono</label>
+             <input type="text" inputmode="numeric" id="abonoDeudaInput_${d.id}" class="mono-input" placeholder="0" style="margin-bottom:8px;" oninput="ccPreviewAbono('${d.id}')">
+             <label style="font-size:11.5px;">Fecha del abono</label>
+             <input type="date" id="abonoFecha_${d.id}" class="mono-input" value="${new Date().toISOString().slice(0,10)}" style="margin-bottom:8px;">
+             ${d.tasaAnual>0 ? `
+             <label style="font-size:11.5px;">¿Qué quieres hacer con el abono?</label>
+             <div style="display:flex; gap:8px; margin-bottom:8px;">
+               <button type="button" id="modoTiempo_${d.id}" class="btn-modo-abono activo" onclick="event.stopPropagation(); ccSetModoAbono('${d.id}','tiempo')">Reducir tiempo</button>
+               <button type="button" id="modoCuota_${d.id}" class="btn-modo-abono" onclick="event.stopPropagation(); ccSetModoAbono('${d.id}','cuota')">Reducir cuota</button>
+             </div>
+             <div class="hint" style="margin-bottom:6px; font-size:11px;">Reducir tiempo: terminas antes (ahorras más). Reducir cuota: pagas menos cada mes.</div>
+             <div class="hint" id="abonoPreview_${d.id}" style="margin-bottom:8px;">Escribe el monto para ver tu ahorro.</div>` : `<div class="hint" id="abonoPreview_${d.id}" style="margin-bottom:8px;"></div>`}
              <div class="edit-actions">
-               <button class="btn-primary" style="margin:0;" onclick="event.stopPropagation(); confirmarAbonoDeuda('${d.id}')">Registrar</button>
-               <button class="btn-ghost" style="margin:0;" onclick="event.stopPropagation(); abonandoDeudaId=null; renderDeudas();">Cancelar</button>
+               <button class="btn-primary" style="margin:0;" onclick="event.stopPropagation(); pedirConfirmarAbonoCapital('${d.id}')">Abonar a capital</button>
+               <button class="btn-ghost" style="margin:0;" onclick="event.stopPropagation(); abonandoDeudaId=null; ccModoAbono={}; renderDeudas();">Cancelar</button>
              </div>
            </div>`
-        : `<button class="btn-ghost" style="margin-top:0;" onclick="event.stopPropagation(); abonandoDeudaId='${d.id}'; renderDeudas();">Registrar abono</button>`}
+        : `<button class="btn-ghost" style="margin-top:0;" onclick="event.stopPropagation(); abonandoDeudaId='${d.id}'; renderDeudas();">💰 Abono a capital</button>`}
     </div>`;
   }).join("");
   if(editingDeudaId){
@@ -3525,7 +3782,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "7.1";
+const APP_VERSION = "7.3";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
