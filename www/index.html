@@ -664,24 +664,24 @@
         <button class="btn-primary" onclick="addGasto()">Agregar gasto</button>
       </div>
 
-      <div class="card" style="margin-top:12px;">
+      <div class="card" style="margin-top:12px; background:linear-gradient(135deg,#FBE8D3,#F5D9BE); border:1px solid #E9C9A3;">
         <div class="grupo-ing-head" onclick="toggleVerGastosFijos()" style="cursor:pointer;">
           <div>
-            <div class="s-txt">⚡ Marcar gastos fijos como pagados</div>
-            <div class="s-sub">Actívalos y se registran solos con su valor</div>
+            <div class="s-txt" style="color:#7A4A18;">⚡ Marcar gastos fijos como pagados</div>
+            <div class="s-sub" style="color:#9A6B33;">👆 Toca aquí para desplegar y marcarlos</div>
           </div>
-          <span class="chev" id="chevGastosFijos">▼</span>
+          <span class="chev" id="chevGastosFijos" style="color:#7A4A18;">▼</span>
         </div>
         <div id="gastosFijosList" style="display:none; margin-top:10px;"></div>
       </div>
 
-      <div class="card" style="margin-top:12px;">
+      <div class="card" style="margin-top:12px; background:linear-gradient(135deg,#FBE8D3,#F5D9BE); border:1px solid #E9C9A3;">
         <div class="grupo-ing-head" onclick="toggleVerPagoDeudas()" style="cursor:pointer;">
           <div>
-            <div class="s-txt">💳 Registrar pago de deudas</div>
-            <div class="s-sub">Escribe cuánto pagaste y calcula capital e interés</div>
+            <div class="s-txt" style="color:#7A4A18;">💳 Registrar pago de deudas</div>
+            <div class="s-sub" style="color:#9A6B33;">👆 Toca aquí para registrar cuánto pagaste</div>
           </div>
-          <span class="chev" id="chevPagoDeudas">▼</span>
+          <span class="chev" id="chevPagoDeudas" style="color:#7A4A18;">▼</span>
         </div>
         <div id="pagoDeudasList" style="display:none; margin-top:10px;"></div>
       </div>
@@ -702,7 +702,13 @@
       </div>
       <div id="gastosList"></div>
 
-      <span class="toggle-link" onclick="toggleResumen()">▾ Ver presupuestado vs. real por rubro</span>
+      <div onclick="toggleResumen()" style="cursor:pointer; margin-top:4px; padding:15px 16px; background:linear-gradient(135deg,#13B183,#0B7D5C); border-radius:14px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 14px rgba(11,125,92,.25);">
+        <div>
+          <div style="color:#fff; font-size:14.5px; font-weight:800;">📊 Presupuestado vs. real por rubro</div>
+          <div style="color:rgba(255,255,255,.9); font-size:12px; margin-top:2px;">Toca para ver cuánto planeaste y cuánto gastaste</div>
+        </div>
+        <span id="chevResumen" style="color:#fff; font-size:16px;">▾</span>
+      </div>
       <div id="resumenBox" style="display:none;">
         <div class="card" style="padding:12px;"><div id="resumenList"></div></div>
       </div>
@@ -1463,7 +1469,7 @@ function renderDashboard(){
   const sob = sobrante();
 
   // anillo: ahora mide cuánto del INGRESO TOTAL está asignado (fijos + variables + ahorro)
-  const presuTotal = totalPresupuestado();
+  const presuTotal = totalPresupuestado() + totalPagosDeuda();
   const pctIngresoAsignado = state.ingreso>0 ? (presuTotal/state.ingreso*100) : 0;
   const avanceRing = Math.max(0, Math.min(100, pctIngresoAsignado));
   const circ = 2*Math.PI*53;
@@ -2185,9 +2191,9 @@ function renderPagoDeudas(){
           ? `<div class="s-sub" style="color:var(--brand-dark); font-weight:600; margin-top:6px;">✓ Pagaste ${money(yaPago.monto)} este mes
                <button class="btn-ghost" style="margin:6px 0 0; padding:6px 10px; font-size:12px;" onclick="deshacerPagoDeuda('${yaPago.id}','${d.id}')">Deshacer</button>
              </div>`
-          : `<div style="display:flex; gap:8px; margin-top:8px;">
-               <input type="text" inputmode="numeric" id="pagoDeudaInput_${d.id}" class="mono-input" placeholder="${sugerido? money(sugerido).replace('$','') : 'Monto'}" style="flex:1;" oninput="ccPreviewPagoDeuda('${d.id}')">
-               <button class="btn-primary" style="margin:0; flex:0 0 auto;" onclick="registrarPagoDeuda('${d.id}')">Registrar</button>
+          : `<div style="margin-top:8px;">
+               <input type="text" inputmode="numeric" id="pagoDeudaInput_${d.id}" class="mono-input" placeholder="${sugerido? money(sugerido).replace('$','') : 'Escribe el monto'}" style="width:100%; font-size:17px; padding:14px; text-align:center; margin-bottom:8px;" oninput="ccPreviewPagoDeuda('${d.id}')">
+               <button class="btn-primary" style="margin:0; width:100%;" onclick="registrarPagoDeuda('${d.id}')">Registrar pago</button>
              </div>
              <div class="hint" id="pagoDeudaPreview_${d.id}" style="margin-top:6px;"></div>`}
       </div>`;
@@ -2481,8 +2487,8 @@ function toggleResumen(){
   const box = document.getElementById("resumenBox");
   const abierto = box.style.display !== "none";
   box.style.display = abierto ? "none" : "block";
-  document.querySelector(".toggle-link").textContent =
-    (abierto ? "▾ Ver" : "▴ Ocultar") + " presupuestado vs. real por rubro";
+  const chev = document.getElementById("chevResumen");
+  if(chev) chev.textContent = abierto ? "▾" : "▴";
 }
 
 function renderResumen(){
@@ -3285,11 +3291,11 @@ document.getElementById("feAhorrado").addEventListener("input", e=>{
 });
 document.getElementById("feAporte").addEventListener("input", e=>{
   state.fondoEmergencia.aporteMensual = numFromMasked(e.target);
-  saveState(); renderAhorrosLigero();
+  saveState(); renderAhorrosLigero(); renderAhorroDisponible();
 });
 document.getElementById("feTasa").addEventListener("input", e=>{
   state.fondoEmergencia.tasaAnual = parseFloat(e.target.value)||0;
-  saveState(); renderAhorrosLigero();
+  saveState(); renderAhorrosLigero(); renderAhorroDisponible();
 });
 
 function addMeta(){
@@ -3782,7 +3788,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "7.3";
+const APP_VERSION = "7.4";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
