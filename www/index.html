@@ -85,13 +85,15 @@
   }
   .brand .gear svg{width:18px; height:18px;}
 
-  .topbar-row{display:flex; justify-content:space-between; align-items:flex-end; margin-top:16px; gap:10px;}
-  .ingreso-block .label{font-size:10.5px; text-transform:uppercase; letter-spacing:.9px; color:rgba(255,255,255,.7); font-weight:600;}
-  .ingreso-block .value{font-family:var(--font-mono); font-size:25px; font-weight:600; margin-top:1px;}
-  /* Modo dos cajas (pestaña Gastos): valores más pequeños para que quepan */
-  .topbar-row.dos-cajas .ingreso-block .value{ font-size:17px; }
-  .topbar-row.dos-cajas .ingreso-block .label{ font-size:9.5px; letter-spacing:.4px; }
-  .topbar-row.dos-cajas{ gap:8px; }
+  .topbar-row{display:flex; justify-content:space-between; align-items:flex-start; margin-top:16px; gap:10px;}
+  .cc-headbox{
+    flex:1; min-width:0; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.22);
+    border-radius:16px; padding:12px 15px;
+  }
+  .cc-headbox .hb-label{ font-size:11px; text-transform:uppercase; letter-spacing:.8px; color:rgba(255,255,255,.85); font-weight:700; }
+  .cc-headbox .hb-value{ font-family:var(--font-mono); font-size:24px; font-weight:700; color:#fff; margin-top:2px; line-height:1.1; }
+  .cc-headbox.clickable{ cursor:pointer; }
+  .cc-headbox.clickable:active{ background:rgba(255,255,255,.24); }
 
   .period{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
   .mes-select{
@@ -472,21 +474,11 @@
       </button>
     </div>
     <div class="topbar-row">
-      <div class="ingreso-block">
-        <div class="label">Ingreso mensual</div>
-        <div class="value" id="topIngreso">$0</div>
-        <div id="topIngresoEjemplo" style="display:none; font-size:10.5px; color:rgba(255,255,255,.85); margin-top:2px; font-weight:600;">Ejemplo · edítalo en Presupuesto</div>
-      </div>
-      <div class="ingreso-block" id="topCaja2" style="display:none;">
-        <div class="label">Pagaste</div>
-        <div class="value">$0</div>
-      </div>
-      <div id="topBreB" onclick="ccIrApoyar()" style="display:none; align-items:center; gap:10px; cursor:pointer; background:rgba(255,255,255,.15); padding:10px 14px; border-radius:14px;">
-        <img src="icons/breb-logo.png" alt="Bre-B" style="height:30px; width:auto; border-radius:6px; background:#fff; padding:3px;">
-        <div>
-          <div style="font-size:13px; font-weight:800; color:#fff;">Apoya la app</div>
-          <div style="font-size:11px; color:rgba(255,255,255,.85);">Toca para donar por Bre-B →</div>
-        </div>
+      <div class="cc-headbox" id="ccHeadbox">
+        <div class="hb-label" id="hbLabel">Ingreso mensual</div>
+        <div class="hb-value" id="topIngreso">$0</div>
+        <div id="topIngresoEjemplo" style="display:none; font-size:10.5px; color:rgba(255,255,255,.9); margin-top:2px; font-weight:600;">Ejemplo · edítalo en Presupuesto</div>
+        <div id="hbExtra" style="display:none; font-size:11px; color:rgba(255,255,255,.9); margin-top:3px; line-height:1.35;"></div>
       </div>
       <div class="period">
         <select class="mes-select" id="anioActivoSelect" aria-label="Año activo"></select>
@@ -1316,48 +1308,48 @@ function cambiarAnio(delta){
    RENDER: TOPBAR
    ===================================================================== */
 function renderTopbar(){
-  // Encabezado dinámico: título y valor según la pestaña actual
-  const lblEl = document.querySelector(".ingreso-block .label");
+  const box = document.getElementById("ccHeadbox");
+  const lblEl = document.getElementById("hbLabel");
   const valEl = document.getElementById("topIngreso");
   const topEj = document.getElementById("topIngresoEjemplo");
-  const cajaBre = document.getElementById("topBreB");
-  const caja2 = document.getElementById("topCaja2");
+  const extra = document.getElementById("hbExtra");
   if(topEj) topEj.style.display = "none";
-  if(cajaBre) cajaBre.style.display = "none";
-  if(caja2) caja2.style.display = "none";
-  const blockIngreso = document.querySelector(".ingreso-block");
-  if(blockIngreso) blockIngreso.style.display = "";
-  const topRow = document.querySelector(".topbar-row");
-  if(topRow) topRow.classList.toggle("dos-cajas", ccVistaActual==="gastos");
+  if(extra){ extra.style.display = "none"; extra.innerHTML = ""; }
+  if(valEl) valEl.style.fontSize = "";
+  if(box){ box.classList.remove("clickable"); box.onclick = null; }
 
   if(ccVistaActual === "deudas"){
-    if(lblEl) lblEl.textContent = "Total de deudas";
-    if(valEl) valEl.textContent = money(totalDeuda());
+    lblEl.textContent = "Total de deudas";
+    valEl.textContent = money(totalDeuda());
   } else if(ccVistaActual === "gastos"){
-    if(lblEl) lblEl.textContent = "Presupuestado del mes";
-    if(valEl) valEl.textContent = money(totalPresupuestado() + totalPagosDeuda());
-    // Segunda caja: lo pagado (registrado) este mes
-    if(caja2){
-      caja2.style.display = "";
-      const pagado = totalRealMes(state.mesActivo, state.anioActivo);
-      caja2.querySelector(".label").textContent = "Pagaste";
-      caja2.querySelector(".value").textContent = money(pagado);
-    }
+    lblEl.textContent = "Has pagado este mes";
+    valEl.textContent = money(totalRealMes(state.mesActivo, state.anioActivo));
   } else if(ccVistaActual === "ahorros"){
-    if(lblEl) lblEl.textContent = "Sigue invirtiendo";
-    const totalAhorro = (state.fondoEmergencia.ahorrado||0) + totalAhorradoMetas();
-    if(valEl) valEl.textContent = money(totalAhorro);
+    lblEl.textContent = "Sigue invirtiendo";
+    const presuAhorro = ahorroDisponibleMensual();
+    valEl.textContent = money(presuAhorro);
+    if(extra){
+      extra.style.display = "block";
+      extra.textContent = presuAhorro>0
+        ? "Es lo que tu presupuesto destina a ahorro este mes."
+        : "💪 Aún no destinas dinero al ahorro. ¡Empieza con un rubro de Ahorro en tu presupuesto!";
+    }
   } else if(ccVistaActual === "inicio"){
-    // En Inicio: quitar el ingreso y mostrar "Apoya la app" con Bre-B
-    if(blockIngreso) blockIngreso.style.display = "none";
-    if(cajaBre) cajaBre.style.display = "flex";
+    lblEl.textContent = "Apoya la app 💚";
+    valEl.textContent = "Bre-B";
+    if(extra){
+      extra.style.display = "block";
+      extra.textContent = "Toca para donar por Bre-B →";
+    }
+    if(box){ box.classList.add("clickable"); box.onclick = ccIrApoyar; }
   } else if(ccVistaActual === "ajustes"){
-    if(lblEl) lblEl.textContent = "Apoya y ajustes";
-    if(valEl) valEl.textContent = "⚙️";
+    lblEl.textContent = "Apoya y ajustes";
+    valEl.textContent = "⚙️ Configuración";
+    valEl.style.fontSize = "18px";
   } else {
-    // Presupuesto (y otras): muestra el ingreso, editable
-    if(lblEl) lblEl.textContent = "Ingreso mensual";
-    if(valEl) valEl.textContent = money(state.ingreso);
+    // Presupuesto: ingreso editable
+    lblEl.textContent = "Ingreso mensual";
+    valEl.textContent = money(state.ingreso);
     if(topEj && ccVistaActual==="presupuesto"){
       topEj.style.display = (state.ingresoPrincipal && state.ingresoPrincipal.esEjemplo) ? "block" : "none";
     }
@@ -3907,7 +3899,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "8.0";
+const APP_VERSION = "8.1";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
