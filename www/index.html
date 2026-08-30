@@ -88,6 +88,10 @@
   .topbar-row{display:flex; justify-content:space-between; align-items:flex-end; margin-top:16px; gap:10px;}
   .ingreso-block .label{font-size:10.5px; text-transform:uppercase; letter-spacing:.9px; color:rgba(255,255,255,.7); font-weight:600;}
   .ingreso-block .value{font-family:var(--font-mono); font-size:25px; font-weight:600; margin-top:1px;}
+  /* Modo dos cajas (pestaña Gastos): valores más pequeños para que quepan */
+  .topbar-row.dos-cajas .ingreso-block .value{ font-size:17px; }
+  .topbar-row.dos-cajas .ingreso-block .label{ font-size:9.5px; letter-spacing:.4px; }
+  .topbar-row.dos-cajas{ gap:8px; }
 
   .period{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
   .mes-select{
@@ -948,7 +952,7 @@
     </button>
     <button data-view="ajustes" onclick="showView('ajustes')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
-      <span>Apoya y ajustes</span>
+      <span>Ajustes</span>
     </button>
   </nav>
 
@@ -1323,6 +1327,8 @@ function renderTopbar(){
   if(caja2) caja2.style.display = "none";
   const blockIngreso = document.querySelector(".ingreso-block");
   if(blockIngreso) blockIngreso.style.display = "";
+  const topRow = document.querySelector(".topbar-row");
+  if(topRow) topRow.classList.toggle("dos-cajas", ccVistaActual==="gastos");
 
   if(ccVistaActual === "deudas"){
     if(lblEl) lblEl.textContent = "Total de deudas";
@@ -1345,6 +1351,9 @@ function renderTopbar(){
     // En Inicio: quitar el ingreso y mostrar "Apoya la app" con Bre-B
     if(blockIngreso) blockIngreso.style.display = "none";
     if(cajaBre) cajaBre.style.display = "flex";
+  } else if(ccVistaActual === "ajustes"){
+    if(lblEl) lblEl.textContent = "Apoya y ajustes";
+    if(valEl) valEl.textContent = "⚙️";
   } else {
     // Presupuesto (y otras): muestra el ingreso, editable
     if(lblEl) lblEl.textContent = "Ingreso mensual";
@@ -3884,7 +3893,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "7.8";
+const APP_VERSION = "7.9";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
