@@ -473,6 +473,17 @@
         <div class="value" id="topIngreso">$0</div>
         <div id="topIngresoEjemplo" style="display:none; font-size:10.5px; color:rgba(255,255,255,.85); margin-top:2px; font-weight:600;">Ejemplo · edítalo en Presupuesto</div>
       </div>
+      <div class="ingreso-block" id="topCaja2" style="display:none;">
+        <div class="label">Pagaste</div>
+        <div class="value">$0</div>
+      </div>
+      <div id="topBreB" onclick="ccIrApoyar()" style="display:none; align-items:center; gap:10px; cursor:pointer; background:rgba(255,255,255,.15); padding:10px 14px; border-radius:14px;">
+        <img src="icons/breb-logo.png" alt="Bre-B" style="height:30px; width:auto; border-radius:6px; background:#fff; padding:3px;">
+        <div>
+          <div style="font-size:13px; font-weight:800; color:#fff;">Apoya la app</div>
+          <div style="font-size:11px; color:rgba(255,255,255,.85);">Toca para donar por Bre-B →</div>
+        </div>
+      </div>
       <div class="period">
         <select class="mes-select" id="anioActivoSelect" aria-label="Año activo"></select>
         <select class="mes-select" id="mesActivo" aria-label="Mes activo"></select>
@@ -638,6 +649,7 @@
         <input type="text" inputmode="decimal" id="newRubroCant" class="mono-input" placeholder="0" oninput="onCantInput(this,'newRubroModo')">
         <label>Día del mes en que pagas esta obligación (opcional)</label>
         <input type="number" min="1" max="31" id="newRubroDia" class="mono-input" placeholder="Ej: 5 (te avisa un día antes)">
+        <div class="hint" style="margin-top:4px;">Si el mes es más corto (febrero, etc.), te avisaremos el último día disponible.</div>
         <div class="edit-actions">
           <button class="btn-primary" style="margin:0;" onclick="addCustomRubro()">Guardar rubro</button>
           <button class="btn-ghost" style="margin:0;" onclick="toggleAddRubro()">Cancelar</button>
@@ -766,6 +778,7 @@
         <input type="text" inputmode="decimal" id="dTasa" class="mono-input" placeholder="Ej: 24">
         <label>Día del mes en que pagas (opcional, para recordatorio)</label>
         <input type="number" min="1" max="31" id="dDiaPago" class="mono-input" placeholder="Ej: 5 (te avisa un día antes)">
+        <div class="hint" style="margin-top:4px;">Si el mes es más corto (febrero, etc.), te avisaremos el último día disponible.</div>
         <label>Fecha objetivo de pago (opcional)</label>
         <input type="date" id="dFecha" onchange="onFechaDeudaChange()">
         <label>O meses para pagarla (opcional, calcula el pago sugerido)</label>
@@ -935,7 +948,7 @@
     </button>
     <button data-view="ajustes" onclick="showView('ajustes')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>
-      <span>Ajustes</span>
+      <span>Apoya y ajustes</span>
     </button>
   </nav>
 
@@ -1274,6 +1287,17 @@ function showView(name){
   renderAll();
 }
 
+function ccIrApoyar(){
+  showView("ajustes");
+  setTimeout(()=>{
+    const b = document.getElementById("bloqueDonacion");
+    const cont = document.getElementById("views");
+    if(b && cont){
+      cont.scrollTo({ top: b.offsetTop - 70, behavior:"smooth" });
+    }
+  }, 150);
+}
+
 function cambiarAnio(delta){
   const nuevo = state.anioActivo + delta;
   if(nuevo < 2015 || nuevo > 2100) return;
@@ -1288,9 +1312,47 @@ function cambiarAnio(delta){
    RENDER: TOPBAR
    ===================================================================== */
 function renderTopbar(){
-  document.getElementById("topIngreso").textContent = money(state.ingreso);
+  // Encabezado dinámico: título y valor según la pestaña actual
+  const lblEl = document.querySelector(".ingreso-block .label");
+  const valEl = document.getElementById("topIngreso");
   const topEj = document.getElementById("topIngresoEjemplo");
-  if(topEj) topEj.style.display = (state.ingresoPrincipal && state.ingresoPrincipal.esEjemplo) ? "block" : "none";
+  const cajaBre = document.getElementById("topBreB");
+  const caja2 = document.getElementById("topCaja2");
+  if(topEj) topEj.style.display = "none";
+  if(cajaBre) cajaBre.style.display = "none";
+  if(caja2) caja2.style.display = "none";
+  const blockIngreso = document.querySelector(".ingreso-block");
+  if(blockIngreso) blockIngreso.style.display = "";
+
+  if(ccVistaActual === "deudas"){
+    if(lblEl) lblEl.textContent = "Total de deudas";
+    if(valEl) valEl.textContent = money(totalDeuda());
+  } else if(ccVistaActual === "gastos"){
+    if(lblEl) lblEl.textContent = "Presupuestado del mes";
+    if(valEl) valEl.textContent = money(totalPresupuestado() + totalPagosDeuda());
+    // Segunda caja: lo pagado (registrado) este mes
+    if(caja2){
+      caja2.style.display = "";
+      const pagado = totalRealMes(state.mesActivo, state.anioActivo);
+      caja2.querySelector(".label").textContent = "Pagaste";
+      caja2.querySelector(".value").textContent = money(pagado);
+    }
+  } else if(ccVistaActual === "ahorros"){
+    if(lblEl) lblEl.textContent = "Sigue invirtiendo";
+    const totalAhorro = (state.fondoEmergencia.ahorrado||0) + totalAhorradoMetas();
+    if(valEl) valEl.textContent = money(totalAhorro);
+  } else if(ccVistaActual === "inicio"){
+    // En Inicio: quitar el ingreso y mostrar "Apoya la app" con Bre-B
+    if(blockIngreso) blockIngreso.style.display = "none";
+    if(cajaBre) cajaBre.style.display = "flex";
+  } else {
+    // Presupuesto (y otras): muestra el ingreso, editable
+    if(lblEl) lblEl.textContent = "Ingreso mensual";
+    if(valEl) valEl.textContent = money(state.ingreso);
+    if(topEj && ccVistaActual==="presupuesto"){
+      topEj.style.display = (state.ingresoPrincipal && state.ingresoPrincipal.esEjemplo) ? "block" : "none";
+    }
+  }
 
   // Desplegable de año
   const selA = document.getElementById("anioActivoSelect");
@@ -3822,7 +3884,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "7.6";
+const APP_VERSION = "7.8";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -4155,6 +4217,14 @@ async function abrirAjustesAlarmasExactas(){
 
 /* Calcula las proximas N ocurrencias reales y las agenda una por una.
    Es mas fiable que pedirle al plugin que repita solo. */
+/* Devuelve la fecha de pago ajustada: si el día no existe en ese mes
+   (ej: 31 en febrero), usa el último día real del mes. */
+function ccFechaPagoDelMes(anio, mes, dia, hora){
+  const ultimoDia = new Date(anio, mes+1, 0).getDate(); // último día real del mes
+  const diaReal = Math.min(dia, ultimoDia);
+  return new Date(anio, mes, diaReal, hora||9, 0, 0);
+}
+
 async function ccReprogramarNativo(){
   const LN = ccNativo();
   if(!LN) return false;
@@ -4206,9 +4276,9 @@ async function ccReprogramarNativo(){
       if(lista.length >= CC_MAX_NOTIFS) break;
       const anio = hoy.getFullYear();
       const mes = hoy.getMonth() + m;
-      // día de pago de ese mes
-      const diaPagoFecha = new Date(anio, mes, d.diaPago, 9, 0, 0);
-      // un día antes, a las 9am
+      // día de pago de ese mes (ajustado si el día no existe, ej: 31 en feb)
+      const diaPagoFecha = ccFechaPagoDelMes(anio, mes, d.diaPago, 9);
+      // un día antes
       const aviso = new Date(diaPagoFecha.getTime() - 24*60*60*1000);
       if(aviso > new Date()){
         lista.push({
@@ -4231,7 +4301,7 @@ async function ccReprogramarNativo(){
     const hoy = new Date();
     for(let m=0; m<3; m++){
       if(lista.length >= CC_MAX_NOTIFS) break;
-      const diaPagoFecha = new Date(hoy.getFullYear(), hoy.getMonth()+m, r.diaPago, 9, 0, 0);
+      const diaPagoFecha = ccFechaPagoDelMes(hoy.getFullYear(), hoy.getMonth()+m, r.diaPago, 9);
       const aviso = new Date(diaPagoFecha.getTime() - 24*60*60*1000);
       if(aviso > new Date()){
         lista.push({
@@ -4707,13 +4777,19 @@ function renderAvisoRespaldo(){
   let ultimo = 0;
   try{ ultimo = Number(localStorage.getItem(CLAVE_RESPALDO) || 0); }catch(e){}
   const dias = ultimo ? Math.floor((Date.now()-ultimo)/86400000) : 999;
-  if(dias < 30) return;
+
+  // Mostrar los DOMINGOS si no se ha respaldado en los últimos 7 días.
+  const hoy = new Date();
+  const esDomingo = hoy.getDay() === 0;
+  const respaldadoEstaSemana = ultimo && dias < 7;
+  if(!(esDomingo && !respaldadoEstaSemana)) return;
+
   const div = document.createElement("div");
   div.id = "avisoRespaldo";
   div.className = "card";
   div.style.cssText = "margin-top:10px;border-left:4px solid #0F8F6B;";
-  div.innerHTML = `<div class="s-txt">Guarda una copia de tu historial</div>
-    <div class="hint" style="margin:6px 0 10px;">${ultimo ? "Hace "+dias+" días que no haces respaldo." : "Aún no has hecho ningún respaldo."} Si cambias de celular o borras la app, pierdes todo. Toma 5 segundos.</div>
+  div.innerHTML = `<div class="s-txt">🗓️ Domingo de respaldo</div>
+    <div class="hint" style="margin:6px 0 10px;">${ultimo ? "Tu último respaldo fue hace "+dias+" días." : "Aún no has hecho ningún respaldo."} Guarda una copia hoy para no perder tu historial. Toma 5 segundos.</div>
     <div class="io-row" style="margin-top:0;">
       <button class="btn-primary" style="margin-top:0;" onclick="exportBackupJSON(); marcarRespaldoHecho();">⬇ Guardar copia</button>
       <button class="btn-ghost" onclick="marcarRespaldoHecho()">Ahora no</button>
