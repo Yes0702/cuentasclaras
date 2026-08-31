@@ -1591,16 +1591,44 @@ function renderOrdenPagos(){
     if(b.dia>0) return 1;
     return 0;
   });
-  box.innerHTML = items.map(it=>{
+  const MOSTRAR = 6;
+  const visibles = verTodosPagos ? items : items.slice(0, MOSTRAR);
+  const ocultos = items.length - visibles.length;
+
+  let html = visibles.map(it=>{
     const sinFecha = !(it.dia>0);
+    const accion = it.tipo==="deuda" ? `ccIrAPagar('deuda')` : `ccIrAPagar('rubro')`;
     return `
-    <div class="orden-pago-row ${sinFecha?"sin-fecha":""}" onclick="showView('gastos')">
+    <div class="orden-pago-row ${sinFecha?"sin-fecha":""}" onclick="${accion}">
       <div class="op-dia">${it.dia>0 ? "Día "+it.dia : "Sin fecha"}</div>
       <div class="op-nombre">${it.icono} ${esc(it.nombre)}</div>
       <div class="op-monto">${money(it.monto)}</div>
     </div>`;
-  }).join("") +
-  `<div class="hint" style="margin-top:8px;">Ordenados por fecha de pago. Toca uno para ir a registrarlo. Los sin fecha aparecen al final.</div>`;
+  }).join("");
+
+  if(ocultos > 0 && !verTodosPagos){
+    html += `<button class="add-row-btn" style="margin-top:6px;" onclick="verTodosPagos=true; renderOrdenPagos();">▾ Ver los otros ${ocultos}</button>`;
+  } else if(verTodosPagos && items.length > MOSTRAR){
+    html += `<button class="add-row-btn" style="margin-top:6px;" onclick="verTodosPagos=false; renderOrdenPagos();">▴ Mostrar solo los primeros ${MOSTRAR}</button>`;
+  }
+  html += `<div class="hint" style="margin-top:8px;">Ordenados por fecha de pago. Toca uno para ir a registrarlo. Los sin fecha aparecen al final.</div>`;
+  box.innerHTML = html;
+}
+let verTodosPagos = false;
+/* Lleva a Gastos y abre el desplegable correcto (fijos o deudas) */
+function ccIrAPagar(tipo){
+  showView("gastos");
+  setTimeout(()=>{
+    if(tipo==="deuda"){
+      if(!verPagoDeudas) toggleVerPagoDeudas();
+      const el = document.getElementById("pagoDeudasList");
+      if(el) el.scrollIntoView({ behavior:"smooth", block:"center" });
+    } else {
+      if(!verGastosFijos) toggleVerGastosFijos();
+      const el = document.getElementById("gastosFijosList");
+      if(el) el.scrollIntoView({ behavior:"smooth", block:"center" });
+    }
+  }, 200);
 }
 
 function renderDashboard(){
@@ -3964,7 +3992,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "8.3";
+const APP_VERSION = "8.4";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
