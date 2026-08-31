@@ -94,6 +94,15 @@
   .cc-headbox .hb-value{ font-family:var(--font-mono); font-size:24px; font-weight:700; color:#fff; margin-top:2px; line-height:1.1; }
   .cc-headbox.clickable{ cursor:pointer; }
   .cc-headbox.clickable:active{ background:rgba(255,255,255,.24); }
+  .orden-pago-row{
+    display:flex; align-items:center; gap:10px; padding:11px 4px; border-bottom:1px solid var(--line-soft); cursor:pointer;
+  }
+  .orden-pago-row:last-of-type{ border-bottom:none; }
+  .orden-pago-row .op-dia{ font-size:11px; font-weight:700; color:var(--brand-dark); background:var(--brand-soft); padding:4px 8px; border-radius:8px; white-space:nowrap; min-width:56px; text-align:center; }
+  .orden-pago-row .op-nombre{ flex:1; min-width:0; font-size:13.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .orden-pago-row .op-monto{ font-family:var(--font-mono); font-size:13.5px; font-weight:700; white-space:nowrap; }
+  .orden-pago-row.sin-fecha{ opacity:.55; }
+  .orden-pago-row.sin-fecha .op-dia{ color:var(--ink-mute); background:#EEF1F3; }
 
   .period{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
   .mes-select{
@@ -534,6 +543,11 @@
         <span class="toggle-link" id="btnTogglePrioridad" onclick="toggleListaPrioridad()" style="display:none; margin-top:8px;"></span>
       </div>
 
+      <h2 class="section-title">Orden de pagos del mes<div class="rule"></div></h2>
+      <div class="card">
+        <div id="ordenPagosList"></div>
+      </div>
+
       <h2 class="section-title">Ahorro y colchón<div class="rule"></div></h2>
       <div class="card">
         <div class="bar-row" style="margin-bottom:0;">
@@ -645,7 +659,9 @@
         <label id="newRubroCantLabel">% del sobrante</label>
         <input type="text" inputmode="decimal" id="newRubroCant" class="mono-input" placeholder="0" oninput="onCantInput(this,'newRubroModo')">
         <label>Día del mes en que pagas esta obligación (opcional)</label>
-        <input type="number" min="1" max="31" id="newRubroDia" class="mono-input" placeholder="Ej: 5 (te avisa un día antes)">
+        <select id="newRubroDia" class="mono-input">
+          <option value="">Sin recordatorio</option>
+        </select>
         <div class="hint" style="margin-top:4px;">Si el mes es más corto (febrero, etc.), te avisaremos el último día disponible.</div>
         <div class="edit-actions">
           <button class="btn-primary" style="margin:0;" onclick="addCustomRubro()">Guardar rubro</button>
@@ -774,7 +790,9 @@
         <label>% de interés anual que te cobran (opcional)</label>
         <input type="text" inputmode="decimal" id="dTasa" class="mono-input" placeholder="Ej: 24">
         <label>Día del mes en que pagas (opcional, para recordatorio)</label>
-        <input type="number" min="1" max="31" id="dDiaPago" class="mono-input" placeholder="Ej: 5 (te avisa un día antes)">
+        <select id="dDiaPago" class="mono-input">
+          <option value="">Sin recordatorio</option>
+        </select>
         <div class="hint" style="margin-top:4px;">Si el mes es más corto (febrero, etc.), te avisaremos el último día disponible.</div>
         <label>Fecha objetivo de pago (opcional)</label>
         <input type="date" id="dFecha" onchange="onFechaDeudaChange()">
@@ -818,7 +836,7 @@
       <h2 class="section-title">Nueva meta de ahorro<div class="rule"></div></h2>
       <div class="card">
         <label>Nombre de la meta</label>
-        <input type="text" id="mNombre" placeholder="Ej: Viaje familiar">
+        <input type="text" id="mNombre" placeholder="Ej: Viaje familiar, Soat, Tecnomecánica">
         <div class="field-row">
           <div><label>Monto objetivo</label><input type="text" inputmode="numeric" id="mObjetivo" class="mono-input" placeholder="0" oninput="actualizarHintMeta()"></div>
           <div><label>Ya ahorrado</label><input type="text" inputmode="numeric" id="mAhorrado" class="mono-input" placeholder="0" oninput="actualizarHintMeta()"></div>
@@ -1550,7 +1568,43 @@ function toggleListaPrioridad(){
   mostrarTodaPrioridad = !mostrarTodaPrioridad;
   renderDashboard();
 }
+function renderOrdenPagos(){
+  const box = document.getElementById("ordenPagosList");
+  if(!box) return;
+  // Reunir rubros fijos con monto y deudas con saldo
+  const items = [];
+  state.rubros.filter(r=>r.tipo==="Fijo").forEach(r=>{
+    const monto = montoRubro(r);
+    if(monto>0) items.push({ tipo:"rubro", nombre:r.nombre, dia:r.diaPago||0, monto, icono:"📌" });
+  });
+  state.deudas.filter(d=>d.saldo>0).forEach(d=>{
+    items.push({ tipo:"deuda", nombre:d.nombre, dia:d.diaPago||0, monto:d.pago||0, icono:"💳", id:d.id });
+  });
+  if(items.length===0){
+    box.innerHTML = `<div class="empty-state">No tienes pagos fijos ni deudas este mes.</div>`;
+    return;
+  }
+  // Ordenar: primero los que tienen día (ascendente), luego los sin día
+  items.sort((a,b)=>{
+    if(a.dia>0 && b.dia>0) return a.dia-b.dia;
+    if(a.dia>0) return -1;
+    if(b.dia>0) return 1;
+    return 0;
+  });
+  box.innerHTML = items.map(it=>{
+    const sinFecha = !(it.dia>0);
+    return `
+    <div class="orden-pago-row ${sinFecha?"sin-fecha":""}" onclick="showView('gastos')">
+      <div class="op-dia">${it.dia>0 ? "Día "+it.dia : "Sin fecha"}</div>
+      <div class="op-nombre">${it.icono} ${esc(it.nombre)}</div>
+      <div class="op-monto">${money(it.monto)}</div>
+    </div>`;
+  }).join("") +
+  `<div class="hint" style="margin-top:8px;">Ordenados por fecha de pago. Toca uno para ir a registrarlo. Los sin fecha aparecen al final.</div>`;
+}
+
 function renderDashboard(){
+  renderOrdenPagos();
   const repartido = pctRepartido();
   const sob = sobrante();
 
@@ -1935,7 +1989,10 @@ function renderPresupuesto(){
             <div><label>Prioridad de pago</label><input type="number" id="editPrio_${idx}" class="mono-input" value="${r.prioridad}"></div>
           </div>
           <label>Día del mes en que pagas (recordatorio, opcional)</label>
-          <input type="number" min="1" max="31" id="editDia_${idx}" class="mono-input" value="${r.diaPago||""}" placeholder="Ej: 5">
+          <select id="editDia_${idx}" class="mono-input">
+            <option value="">Sin recordatorio</option>
+            ${Array.from({length:31},(_,k)=>k+1).map(dd=>`<option value="${dd}" ${r.diaPago==dd?"selected":""}>Día ${dd}</option>`).join("")}
+          </select>
           <div class="edit-actions">
             <button class="btn-primary" style="margin:0;" onclick="saveRubroEdit(${idx})">Guardar</button>
       ${esPendiente("rubro:"+idx)
@@ -3322,7 +3379,10 @@ function renderDeudas(){
         <label>% de interés anual (opcional)</label>
         <input type="text" inputmode="decimal" id="edT_${d.id}" class="mono-input" value="${d.tasaAnual||""}">
         <label>Día del mes en que pagas (recordatorio)</label>
-        <input type="number" min="1" max="31" id="edDia_${d.id}" class="mono-input" value="${d.diaPago||""}" placeholder="Ej: 5">
+        <select id="edDia_${d.id}" class="mono-input">
+          <option value="">Sin recordatorio</option>
+          ${Array.from({length:31},(_,k)=>k+1).map(dd=>`<option value="${dd}" ${d.diaPago==dd?"selected":""}>Día ${dd}</option>`).join("")}
+        </select>
         <label>Fecha objetivo de pago (opcional)</label>
         <input type="date" id="edF_${d.id}" value="${d.fecha||""}" onchange="onFechaDeudaEditChange('${d.id}')">
         <label>O meses para pagarla (opcional, calcula el pago sugerido)</label>
@@ -3904,7 +3964,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "8.2";
+const APP_VERSION = "8.3";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -4888,6 +4948,18 @@ function ccContinuarAPresupuesto(){
   if(g) g.style.display = "none";
   showView("presupuesto");
 }
+// Llenar los desplegables de "día de pago" (1 a 31)
+function ccLlenarDiasPago(){
+  ["newRubroDia","dDiaPago"].forEach(id=>{
+    const sel = document.getElementById(id);
+    if(!sel) return;
+    let opts = '<option value="">Sin recordatorio</option>';
+    for(let d=1; d<=31; d++) opts += `<option value="${d}">Día ${d}</option>`;
+    sel.innerHTML = opts;
+  });
+}
+ccLlenarDiasPago();
+
 ccMostrarWelcomeSiPrimeraVez();
 
 // Revisa si hay una versión nueva (a los 2 segundos, sin bloquear el arranque)
