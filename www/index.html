@@ -8,6 +8,10 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cuentas Claras">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -897,6 +901,13 @@
           <span class="chev" id="chevAlarmasDeuda">▼</span>
         </div>
         <div id="alarmasDeudaList" style="display:none; margin-top:10px;"></div>
+      </div>
+
+      <h2 class="section-title">Comparte la app<div class="rule"></div></h2>
+      <div class="card">
+        <div class="s-txt" style="margin-bottom:6px;">📲 Ayuda a que más familias la conozcan</div>
+        <div class="hint" style="margin-bottom:12px;">Comparte Cuentas Claras con quien quieras. Sirve para Android y iPhone.</div>
+        <button class="btn-primary" style="margin-top:0;" onclick="compartirApp()">Compartir app</button>
       </div>
 
       <h2 class="section-title" id="secContacto">Sugerencias<div class="rule"></div></h2>
@@ -4007,7 +4018,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "8.6";
+const APP_VERSION = "8.8";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -4190,6 +4201,27 @@ function abrirExterno(url){
   }catch(e){}
   const w = window.open(url, "_blank");
   if(!w) location.href = url;
+}
+
+function compartirApp(){
+  const url = "https://yes0702.github.io/cuentasclaras/";
+  const mensaje = "📲 Te recomiendo Cuentas Claras, la app para organizar el presupuesto del hogar. Gratis, sin anuncios y sin crear cuenta. Descárgala aquí: " + url;
+  const SH = (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Share) ? Capacitor.Plugins.Share : null;
+  if(SH){
+    SH.share({
+      title: "Cuentas Claras",
+      text: mensaje,
+      dialogTitle: "Compartir Cuentas Claras"
+    }).catch(()=>{});
+    return;
+  }
+  // Navegador: usar Web Share API si existe, si no, copiar
+  if(navigator.share){
+    navigator.share({ title:"Cuentas Claras", text:mensaje, url:url }).catch(()=>{});
+  } else {
+    copiarTexto(mensaje, "Mensaje");
+    toast("Mensaje copiado. Pégalo donde quieras compartir.");
+  }
 }
 
 function abrirWhatsApp(){
@@ -5180,10 +5212,18 @@ function ccIniciarNativo(){
 
   // Al arrancar NO pedimos permiso de notificaciones (eso sería intrusivo).
   // Solo reprogramamos las alarmas si el usuario YA dio permiso antes.
+  // Esto asegura que tras una ACTUALIZACIÓN las alarmas se vuelvan a agendar
+  // (los datos y fechas están guardados; Android solo necesita reprogramarlas).
   ccEstadoPermisoNativo()
     .then(tienePermiso=>{ if(tienePermiso) return ccReprogramarNativo(); })
     .then(()=> renderEstadosAlarmas())
     .catch(()=>{});
+  // Segundo intento a los 3s por si el plugin nativo tardó en cargar al abrir
+  setTimeout(()=>{
+    ccEstadoPermisoNativo()
+      .then(tienePermiso=>{ if(tienePermiso) return ccReprogramarNativo(); })
+      .catch(()=>{});
+  }, 3000);
 
   // Aplica el bloqueo por huella si el usuario lo activó
   ccAplicarBloqueoInicial();
