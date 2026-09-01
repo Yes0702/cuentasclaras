@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cuentas Claras — Presupuesto familiar</title>
+<meta name="description" content="App gratis para organizar el presupuesto del hogar mes a mes. Sin cuentas, sin anuncios, tus datos solo en tu celular.">
+<style>
+  :root{
+    --verde:#0F8F6B;
+    --verde-osc:#0A5B45;
+    --verde-claro:#13B183;
+    --crema:#F3EFE4;
+    --tinta:#20302A;
+    --tinta-suave:#5A6B63;
+    --linea:#E2DECF;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--crema); color:var(--tinta); line-height:1.6;
+    -webkit-font-smoothing:antialiased; overflow-x:hidden;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px;}
+
+  /* ===== HERO ===== */
+  .hero{
+    background:radial-gradient(130% 100% at 75% 0%, var(--verde-claro) 0%, var(--verde) 45%, var(--verde-osc) 100%);
+    color:#fff; padding:44px 0 70px; position:relative; overflow:hidden;
+  }
+  .hero-grid{
+    display:grid; grid-template-columns:1.05fr .95fr; gap:20px; align-items:center;
+  }
+  @media(max-width:820px){
+    .hero-grid{grid-template-columns:1fr; text-align:center;}
+  }
+  .logo-row{display:flex;align-items:center;gap:12px;margin-bottom:26px;}
+  @media(max-width:820px){.logo-row{justify-content:center;}}
+  .logo-row img{width:52px;height:52px;border-radius:14px;box-shadow:0 6px 16px rgba(0,0,0,.2);}
+  .logo-row .name{font-size:19px;font-weight:800;}
+  .logo-row .name span{display:block;font-size:12px;font-weight:500;opacity:.85;}
+
+  .hero h1{font-size:52px;font-weight:800;letter-spacing:-1px;line-height:1;margin-bottom:18px;}
+  @media(max-width:820px){.hero h1{font-size:42px;}}
+  .hero .sub{font-size:17px;color:rgba(255,255,255,.93);max-width:440px;margin-bottom:28px;}
+  @media(max-width:820px){.hero .sub{margin-left:auto;margin-right:auto;}}
+
+  .btn-descarga{
+    display:inline-flex;align-items:center;gap:12px;
+    background:#fff;color:var(--verde-osc);font-size:18px;font-weight:800;
+    padding:17px 34px;border-radius:16px;text-decoration:none;
+    box-shadow:0 14px 34px rgba(0,0,0,.24);
+    transition:transform .15s, box-shadow .15s;
+  }
+  .btn-descarga:hover{transform:translateY(-2px);box-shadow:0 18px 40px rgba(0,0,0,.28);}
+  .btn-descarga:active{transform:scale(.97);}
+  .nota-btn{font-size:13px;color:rgba(255,255,255,.8);margin-top:13px;}
+
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:26px;}
+  @media(max-width:820px){.chips{justify-content:center;}}
+  .chip{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);
+    color:#fff;font-size:13px;font-weight:600;padding:7px 14px;border-radius:100px;}
+
+  /* ===== MOCKUPS ===== */
+  .phones{position:relative;height:540px;display:flex;justify-content:center;align-items:center;}
+  @media(max-width:820px){.phones{height:500px;margin-top:20px;}}
+  .phone{
+    position:absolute;width:216px;border-radius:32px;background:#0c0c0c;
+    padding:8px;box-shadow:0 26px 54px rgba(0,0,0,.34);
+  }
+  .phone img{width:100%;border-radius:25px;display:block;}
+  .phone .notch{
+    position:absolute;top:15px;left:50%;transform:translateX(-50%);
+    width:70px;height:6px;background:#000;border-radius:100px;z-index:2;opacity:.85;
+  }
+  .phone-back{ transform:rotate(8deg) translate(96px, 4px) scale(.86); opacity:.9; }
+  .phone-mid{ transform:rotate(4deg) translate(46px, 18px) scale(.93); opacity:.97; z-index:2; }
+  .phone-front{ transform:rotate(-5deg) translate(-56px, 0); z-index:3; }
+  @media(max-width:820px){
+    .phone{width:190px;}
+    .phone-back{transform:rotate(8deg) translate(104px,2px) scale(.84);}
+    .phone-mid{transform:rotate(4deg) translate(52px,16px) scale(.92);}
+    .phone-front{transform:rotate(-5deg) translate(-66px,0);}
+  }
+  @media(max-width:420px){
+    .phone{width:172px;}
+    .phone-back{transform:rotate(8deg) translate(88px,2px) scale(.82);}
+    .phone-mid{transform:rotate(4deg) translate(46px,14px) scale(.9);}
+    .phone-front{transform:rotate(-5deg) translate(-56px,0);}
+  }
+
+  /* fade-in al cargar */
+  .reveal{opacity:0;transform:translateY(18px);transition:opacity .7s ease, transform .7s ease;}
+  .reveal.visible{opacity:1;transform:none;}
+
+  /* ===== SECCIONES ===== */
+  section{padding:56px 0;}
+  .titulo{font-size:28px;font-weight:800;color:var(--verde-osc);margin-bottom:8px;}
+  .intro{color:var(--tinta-suave);margin-bottom:30px;max-width:560px;}
+
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  @media(max-width:820px){.grid{grid-template-columns:1fr 1fr;}}
+  @media(max-width:520px){.grid{grid-template-columns:1fr;}}
+  .card{
+    background:#fff;border:1px solid var(--linea);border-radius:18px;padding:22px;
+    transition:transform .18s, box-shadow .18s;
+  }
+  .card:hover{transform:translateY(-4px);box-shadow:0 14px 30px rgba(0,0,0,.08);}
+  .card .emoji{font-size:28px;display:block;margin-bottom:10px;}
+  .card h3{font-size:16.5px;font-weight:700;margin-bottom:5px;}
+  .card p{font-size:14px;color:var(--tinta-suave);}
+
+  /* ===== INSTALACIÓN ===== */
+  .instalar{background:#fff;border-top:1px solid var(--linea);border-bottom:1px solid var(--linea);}
+  .pasos{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:640px){.pasos{grid-template-columns:1fr;}}
+  .paso{display:flex;gap:14px;align-items:flex-start;background:var(--crema);border-radius:14px;padding:16px 18px;}
+  .paso .num{flex:0 0 auto;width:34px;height:34px;border-radius:50%;
+    background:var(--verde);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  .paso h3{font-size:15px;font-weight:700;margin-bottom:2px;}
+  .paso p{font-size:13.5px;color:var(--tinta-suave);}
+  .aviso{background:#FFF7E6;border:1px solid #F0D48A;border-radius:14px;
+    padding:16px 18px;margin-top:22px;font-size:14px;color:#8A6D1F;line-height:1.55;}
+
+  /* ===== PRIVACIDAD ===== */
+  .privacidad{text-align:center;}
+  .privacidad .escudo{font-size:44px;margin-bottom:10px;}
+
+  /* ===== CTA FINAL ===== */
+  .cta-final{background:var(--verde-osc);color:#fff;text-align:center;padding:56px 0;}
+  .cta-final h2{font-size:28px;font-weight:800;margin-bottom:22px;}
+
+  footer{padding:32px 0 44px;text-align:center;color:var(--tinta-suave);font-size:13px;}
+  footer a{color:var(--verde);text-decoration:none;font-weight:600;}
+</style>
+</head>
+<body>
+
+  <header class="hero">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div class="hero-text">
+          <div class="logo-row reveal">
+            <img src="icons/icon-192.png" alt="Cuentas Claras">
+            <div class="name">Cuentas Claras<span>Presupuesto del hogar</span></div>
+          </div>
+          <h1 class="reveal">Toma el control de tu dinero</h1>
+          <p class="sub reveal">Ideal para el hogar o para ti solo: registra gastos, planifica metas y elimina el estrés financiero. Cada peso suma en tu tranquilidad.</p>
+          <a class="btn-descarga reveal" href="https://github.com/Yes0702/cuentasclaras/releases/latest/download/CuentasClaras.apk">
+            <span>⬇</span> Descargar para Android
+          </a>
+          <div class="nota-btn reveal">Gratis · Última versión · Solo Android</div>
+          <div class="chips reveal">
+            <span class="chip">Sin anuncios</span>
+            <span class="chip">Sin cuenta</span>
+            <span class="chip">Funciona sin internet</span>
+            <span class="chip">100% privada</span>
+          </div>
+        </div>
+        <div class="phones reveal">
+          <div class="phone phone-back">
+            <div class="notch"></div>
+            <img src="captura-presupuesto.png" alt="Pantalla de presupuesto">
+          </div>
+          <div class="phone phone-mid">
+            <div class="notch"></div>
+            <img src="captura-gastos.png" alt="Pantalla de gastos">
+          </div>
+          <div class="phone phone-front">
+            <div class="notch"></div>
+            <img src="captura-inicio.png" alt="Pantalla de inicio">
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="wrap">
+      <h2 class="titulo reveal">Todo lo que puedes hacer</h2>
+      <p class="intro reveal">Una herramienta completa para llevar las cuentas de la casa sin complicaciones.</p>
+      <div class="grid">
+        <div class="card reveal"><span class="emoji">📊</span><h3>Presupuesto mes a mes</h3><p>Reparte tu ingreso en rubros fijos, variables y ahorro. Sabes en qué se va cada peso.</p></div>
+        <div class="card reveal"><span class="emoji">💳</span><h3>Control de deudas</h3><p>Registra deudas con interés, mira cuánto va a capital y cuánto a intereses, y abona a capital para ahorrar.</p></div>
+        <div class="card reveal"><span class="emoji">🧾</span><h3>Registro de gastos</h3><p>Anota tus gastos del día, marca los pagos fijos y ve tu historial ordenado.</p></div>
+        <div class="card reveal"><span class="emoji">🐷</span><h3>Metas de ahorro</h3><p>Crea metas (viaje, SOAT, estudios) y mira cuánto rinden si las tienes en un banco.</p></div>
+        <div class="card reveal"><span class="emoji">🔔</span><h3>Recordatorios de pago</h3><p>Te avisa un día antes de cada pago para que no se te pase ninguna cuenta.</p></div>
+        <div class="card reveal"><span class="emoji">💾</span><h3>Respaldo seguro</h3><p>Guarda una copia de tus datos y recupérala si cambias de celular.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="instalar">
+    <div class="wrap">
+      <h2 class="titulo reveal">Cómo instalarla</h2>
+      <p class="intro reveal">Como no está en Play Store, Android te pedirá un permiso la primera vez. Es normal y seguro.</p>
+      <div class="pasos">
+        <div class="paso reveal"><div class="num">1</div><div><h3>Toca "Descargar para Android"</h3><p>Se bajará el archivo CuentasClaras.apk a tu celular.</p></div></div>
+        <div class="paso reveal"><div class="num">2</div><div><h3>Abre el archivo descargado</h3><p>Búscalo en tus descargas o en la notificación, y tócalo.</p></div></div>
+        <div class="paso reveal"><div class="num">3</div><div><h3>Permite la instalación</h3><p>Android mostrará "Instalar apps desconocidas". Actívalo para tu navegador. Es un paso único.</p></div></div>
+        <div class="paso reveal"><div class="num">4</div><div><h3>Abre la app</h3><p>Cuando termine de instalar, ábrela y empieza a organizar tus cuentas.</p></div></div>
+      </div>
+      <div class="aviso reveal">📌 <b>¿Ves un aviso de "archivo dañino" o similar?</b> Es un mensaje automático de Android para apps fuera de Play Store. La app es segura; toca "Descargar de todos modos" o "Instalar de todos modos".</div>
+    </div>
+  </section>
+
+  <section class="privacidad">
+    <div class="wrap">
+      <div class="escudo reveal">🔒</div>
+      <h2 class="titulo reveal">Tus datos son tuyos</h2>
+      <p class="intro reveal" style="margin:0 auto;">Cuentas Claras no pide correo ni contraseña, no sube nada a internet y no muestra anuncios. Toda tu información se guarda únicamente en tu teléfono.</p>
+    </div>
+  </section>
+
+  <section class="cta-final">
+    <div class="wrap">
+      <h2 class="reveal">Empieza hoy a tener tus cuentas claras</h2>
+      <a class="btn-descarga reveal" href="https://github.com/Yes0702/cuentasclaras/releases/latest/download/CuentasClaras.apk"><span>⬇</span> Descargar gratis</a>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      Cuentas Claras · Hecho con cariño para las familias.<br>
+      ¿Te sirve la app? Puedes apoyarla con una donación por Bre-B desde Ajustes.
+    </div>
+  </footer>
+
+<script>
+  // Revelado suave al hacer scroll
+  const obs = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add("visible"); obs.unobserve(e.target); } });
+  }, { threshold:.12 });
+  document.querySelectorAll(".reveal").forEach((el,i)=>{
+    el.style.transitionDelay = (i%6*0.06)+"s";
+    obs.observe(el);
+  });
+</script>
+</body>
+</html>
