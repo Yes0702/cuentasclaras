@@ -19,9 +19,9 @@
     --surface-2:#F6FAF8;
     --line:#E3EBE7;
     --line-soft:#EEF3F1;
-    --ink:#122019;
-    --ink-soft:#69796F;
-    --ink-mute:#9AAAA1;
+    --ink:#0F1B15;
+    --ink-soft:#4A5A50;
+    --ink-mute:#7A8A81;
 
     --brand:#12A57A;
     --brand-dark:#0B7D5C;
@@ -130,7 +130,7 @@
   h2.section-title:first-child{margin-top:0;}
   h2.section-title .rule{flex:1; height:1px; background:var(--line);}
 
-  .hint{font-size:11.5px; color:var(--ink-soft); line-height:1.45;}
+  .hint{font-size:13px; color:var(--ink-soft); line-height:1.5; font-weight:500;}
 
   /* ---------- CARDS ---------- */
   .card{
@@ -161,7 +161,7 @@
     background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm);
     padding:12px 13px; box-shadow:var(--shadow);
   }
-  .kpi .k-label{font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.5px; font-weight:600;}
+  .kpi .k-label{font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.4px; font-weight:700;}
   .kpi .k-value{font-family:var(--font-mono); font-size:17px; font-weight:600; margin-top:3px;}
   .kpi-grid.tight{gap:6px;}
   .kpi-grid.tight .kpi{padding:10px 7px; min-width:0;}
@@ -201,7 +201,7 @@
   .priority-list li b{margin-left:auto; font-family:var(--font-mono); font-weight:600;}
 
   /* ---------- FORMS ---------- */
-  label{font-size:11px; color:var(--ink-soft); display:block; margin:12px 0 5px; text-transform:uppercase; letter-spacing:.5px; font-weight:600;}
+  label{font-size:12px; color:var(--ink-soft); display:block; margin:12px 0 5px; text-transform:uppercase; letter-spacing:.4px; font-weight:700;}
   label:first-of-type{margin-top:0;}
   input, select, textarea{
     width:100%; font-family:var(--font-body); font-size:14.5px; color:var(--ink); font-weight:500;
@@ -756,6 +756,7 @@
           <div class="hint" style="color:var(--brand-dark); margin-bottom:8px;">Este es el <b>único</b> archivo que puedes volver a cargar. Úsalo para cambiar de celular o antes de desinstalar.</div>
           <button class="btn-primary" style="margin-top:0;" onclick="exportBackupJSON()">⬇ Descargar respaldo (guardar)</button>
           <button class="btn-outline" style="width:100%; margin-top:8px;" onclick="document.getElementById('importJsonFile').click()">⬆ Importar respaldo (restaurar)</button>
+          <div id="ultimoRespaldoLabel" style="margin-top:10px; font-size:12px; color:var(--brand-dark); text-align:center; font-weight:600;"></div>
         </div>
         <div class="io-row">
           <button class="btn-ghost" onclick="document.getElementById('importCsvFile').click()">Importar CSV de gastos</button>
@@ -2796,6 +2797,20 @@ function importGastosCSV(evt){
 function exportBackupJSON(){
   const hoy = new Date().toISOString().slice(0,10); // 2026-08-27
   downloadFile("cuentas_claras_respaldo_"+hoy+".json", JSON.stringify(state, null, 2), "application/json");
+  marcarRespaldoHecho();
+  renderUltimoRespaldo();
+}
+function renderUltimoRespaldo(){
+  const el = document.getElementById("ultimoRespaldoLabel");
+  if(!el) return;
+  let ultimo = 0;
+  try{ ultimo = Number(localStorage.getItem(CLAVE_RESPALDO) || 0); }catch(e){}
+  if(!ultimo){ el.textContent = "Aún no has hecho ningún respaldo."; el.style.color="#B0761F"; return; }
+  const d = new Date(ultimo);
+  const dias = Math.floor((Date.now()-ultimo)/86400000);
+  const fechaTxt = d.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'}) + " " + d.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+  el.innerHTML = "🛡️ Último respaldo: "+fechaTxt+(dias>=7?" · <span style='color:#B0761F;'>hazlo de nuevo</span>":"");
+  el.style.color = "var(--brand-dark)";
 }
 function importBackupJSON(evt){
   const file = evt.target.files[0];
@@ -3992,7 +4007,7 @@ const CONFIG = {
   apiVersion: "https://api.github.com/repos/Yes0702/cuentasclaras/releases/latest",
   urlVersion: "https://github.com/Yes0702/cuentasclaras/releases/latest/download/version.json"
 };
-const APP_VERSION = "8.4";
+const APP_VERSION = "8.6";
 
 /* =====================================================================
    AVISO DE ACTUALIZACIÓN (revisa al abrir la app)
@@ -4106,7 +4121,44 @@ function mostrarAvisoActualizacion(info){
 
 function ccDescargarActualizacion(url){
   if(!url){ toast("No hay enlace de descarga configurado."); return; }
-  abrirDescargaExterna(url);
+  // Buena práctica: antes de actualizar, ofrecer respaldo de los datos
+  let ultimo = 0;
+  try{ ultimo = Number(localStorage.getItem(CLAVE_RESPALDO) || 0); }catch(e){}
+  const dias = ultimo ? Math.floor((Date.now()-ultimo)/86400000) : 999;
+  const textoUltimo = ultimo
+    ? "Tu último respaldo fue hace "+(dias===0?"menos de un día":dias+" día"+(dias===1?"":"s"))+"."
+    : "Aún no has hecho ningún respaldo.";
+
+  const overlay = document.createElement("div");
+  overlay.id = "modalRespaldoUpdate";
+  overlay.style.cssText = "position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:24px;";
+  overlay.innerHTML = `
+    <div style="background:#fff; border-radius:20px; padding:24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+      <div style="font-size:44px; margin-bottom:8px;">💾</div>
+      <div style="font-size:18px; font-weight:800; color:var(--brand-dark); margin-bottom:10px;">Antes de actualizar</div>
+      <div style="font-size:13.5px; color:var(--ink); line-height:1.55; margin-bottom:8px;">
+        Te recomendamos guardar una copia de tus datos por seguridad. ${textoUltimo}
+      </div>
+      <div style="font-size:12px; color:var(--ink-soft); margin-bottom:16px;">La actualización normalmente conserva tus datos, pero un respaldo te protege por si acaso.</div>
+      <div style="display:flex; flex-direction:column; gap:9px;">
+        <button onclick="ccRespaldarYActualizar('${esc(url)}')" style="background:var(--brand-dark); color:#fff; border:none; border-radius:12px; padding:13px; font-weight:800; cursor:pointer;">💾 Respaldar y luego actualizar</button>
+        <button onclick="ccCerrarModalRespUpd(); abrirDescargaExterna('${esc(url)}');" style="background:#EEF1F3; color:var(--ink); border:none; border-radius:12px; padding:12px; font-weight:700; cursor:pointer;">Actualizar sin respaldar</button>
+        <button onclick="ccCerrarModalRespUpd()" style="background:transparent; color:var(--ink-soft); border:none; padding:6px; font-weight:600; cursor:pointer;">Cancelar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function ccCerrarModalRespUpd(){
+  const m = document.getElementById("modalRespaldoUpdate");
+  if(m) m.remove();
+}
+function ccRespaldarYActualizar(url){
+  exportBackupJSON();
+  marcarRespaldoHecho();
+  ccCerrarModalRespUpd();
+  // dar un momento para que el respaldo se comparta/guarde, luego abrir descarga
+  toast("Respaldo listo. Ahora se abrirá la descarga…");
+  setTimeout(()=>{ abrirDescargaExterna(url); }, 1800);
 }
 
 /* Abre el APK en el navegador del SISTEMA (Chrome), que sí tiene
@@ -4784,6 +4836,7 @@ function renderEstadosAlarmas(){
 function renderAjustes(){
   const verEl = document.getElementById("ccVerAcerca");
   if(verEl) verEl.textContent = "v" + APP_VERSION + " ";
+  renderUltimoRespaldo();
   const cont = document.getElementById("alarmasList");
   if(!cont) return;
   const alarmas = state.alarmas || [];
