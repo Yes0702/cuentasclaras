@@ -56,12 +56,14 @@
   .btn-descarga:hover{transform:translateY(-2px);box-shadow:0 18px 40px rgba(0,0,0,.28);}
   .btn-descarga:active{transform:scale(.97);}
   .btn-iphone{
-    display:inline-flex;align-items:center;gap:10px;margin-left:12px;
-    background:rgba(255,255,255,.14);color:#fff;font-size:16px;font-weight:700;
-    padding:16px 26px;border-radius:16px;text-decoration:none;
-    border:1.5px solid rgba(255,255,255,.4);transition:background .15s;
+    display:inline-flex;align-items:center;gap:12px;margin-left:12px;
+    background:#fff;color:var(--verde-osc);font-size:18px;font-weight:800;
+    padding:17px 34px;border-radius:16px;text-decoration:none;
+    box-shadow:0 14px 34px rgba(0,0,0,.24);
+    transition:transform .15s, box-shadow .15s;
   }
-  .btn-iphone:hover{background:rgba(255,255,255,.24);}
+  .btn-iphone:hover{transform:translateY(-2px);box-shadow:0 18px 40px rgba(0,0,0,.28);}
+  .btn-iphone:active{transform:scale(.97);}
   @media(max-width:820px){.btn-iphone{margin-left:0;margin-top:12px;}}
   .nota-btn{font-size:13px;color:rgba(255,255,255,.8);margin-top:13px;}
 
@@ -155,12 +157,14 @@
           </div>
           <h1 class="reveal">Toma el control de tu dinero</h1>
           <p class="sub reveal">Ideal para el hogar o para ti solo: registra gastos, planifica metas y elimina el estrés financiero. Cada peso suma en tu tranquilidad.</p>
-          <a class="btn-descarga reveal" href="https://github.com/Yes0702/cuentasclaras/releases/latest/download/CuentasClaras.apk">
-            <span>⬇</span> Descargar para Android
-          </a>
-          <a class="btn-iphone reveal" onclick="abrirIphone(event)" href="#iphone">
-            <span></span> Haz tu presupuesto en iPhone
-          </a>
+          <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+            <a class="btn-descarga reveal" href="https://github.com/Yes0702/cuentasclaras/releases/latest/download/CuentasClaras.apk">
+              <span>⬇</span> Descargar para Android
+            </a>
+            <a class="btn-iphone reveal" onclick="abrirIphone(event)" href="#iphone" style="margin-left:0;">
+              <span>🍎</span> Haz tu presupuesto en iPhone
+            </a>
+          </div>
           <div class="nota-btn reveal">Android: descarga directa · iPhone: se usa desde Safari</div>
           <div class="chips reveal">
             <span class="chip">Sin anuncios</span>
