@@ -15,6 +15,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  // Aplica el tema guardado ANTES de pintar, para que no haya parpadeo de claro→oscuro al abrir.
+  try{
+    const t = localStorage.getItem("cc_tema");
+    if(t === "oscuro") document.documentElement.setAttribute("data-theme","dark");
+    else if(t === "claro") document.documentElement.setAttribute("data-theme","light");
+  }catch(e){}
+</script>
 <style>
   :root{
     /* ---- Paleta amable verde/azul ---- */
@@ -51,6 +59,37 @@
 
     --font-body:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono:'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  /* ---- Modo oscuro automático (sigue el sistema), a menos que el usuario elija "Claro" a mano ---- */
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#101713; --surface:#1A2420; --surface-2:#212C26;
+      --line:#2C3A33; --line-soft:#243029;
+      --ink:#EAF3EE; --ink-soft:#9FB0A6; --ink-mute:#7A8B81;
+      --brand:#1CC694; --brand-dark:#3FDDA8; --brand-deep:#0A4536; --brand-soft:#16332A;
+      --blue:#5B9BFF; --blue-soft:#1B2A3D;
+      --orange:#F5A15C; --orange-soft:#3A2A18;
+      --red:#F27C72; --red-soft:#3A1E1B;
+      --amber:#E8C053; --amber-soft:#3A2F14;
+      --money-in:#1CC694; --money-out:#F27C72;
+      --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 22px rgba(0,0,0,.4);
+      --shadow-lg:0 10px 34px rgba(0,0,0,.5);
+    }
+  }
+  /* ---- Modo oscuro forzado a mano desde Ajustes ---- */
+  :root[data-theme="dark"]{
+    --bg:#101713; --surface:#1A2420; --surface-2:#212C26;
+    --line:#2C3A33; --line-soft:#243029;
+    --ink:#EAF3EE; --ink-soft:#9FB0A6; --ink-mute:#7A8B81;
+    --brand:#1CC694; --brand-dark:#3FDDA8; --brand-deep:#0A4536; --brand-soft:#16332A;
+    --blue:#5B9BFF; --blue-soft:#1B2A3D;
+    --orange:#F5A15C; --orange-soft:#3A2A18;
+    --red:#F27C72; --red-soft:#3A1E1B;
+    --amber:#E8C053; --amber-soft:#3A2F14;
+    --money-in:#1CC694; --money-out:#F27C72;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 22px rgba(0,0,0,.4);
+    --shadow-lg:0 10px 34px rgba(0,0,0,.5);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0; padding:0; background:#DDE7E2; font-family:var(--font-body); color:var(--ink); -webkit-font-smoothing:antialiased; height:100%; overflow:hidden;}
@@ -224,7 +263,7 @@
     padding:11px 12px; outline:none; transition:border-color .15s, box-shadow .15s;
     box-sizing:border-box; max-width:100%;
   }
-  input:focus, select:focus, textarea:focus{border-color:var(--brand); box-shadow:0 0 0 3px rgba(18,165,122,.13); background:#fff;}
+  input:focus, select:focus, textarea:focus{border-color:var(--brand); box-shadow:0 0 0 3px rgba(18,165,122,.13); background:var(--surface);}
   input[type=number], .mono-input{font-family:var(--font-mono);}
   .money-mask::placeholder{ color:#B7C2BB; opacity:1; }
   .field-row{display:flex; gap:10px;}
@@ -242,7 +281,7 @@
   .btn-small{padding:7px 11px; font-size:12px; border-radius:9px;}
   .btn-danger{background:var(--red-soft); color:var(--red);}
   .btn-blue{background:var(--blue); color:#fff;}
-  .btn-outline{background:#fff; border:1px solid var(--brand); color:var(--brand-dark);}
+  .btn-outline{background:var(--surface); border:1px solid var(--brand); color:var(--brand-dark);}
 
   /* ---------- RUBROS ---------- */
   .group-header{
@@ -264,7 +303,7 @@
   .deuda-presu-card .dp-monto span{ font-size:10px; font-weight:600; opacity:.7; }
   .deuda-presu-card .dp-edita{ font-size:10.5px; color:#B07A3D; margin-top:4px; font-weight:600; }
   .btn-modo-abono{
-    flex:1; padding:9px 8px; border:1.5px solid var(--line); background:#fff; color:var(--ink-soft);
+    flex:1; padding:9px 8px; border:1.5px solid var(--line); background:var(--surface); color:var(--ink-soft);
     border-radius:10px; font-size:12px; font-weight:700; cursor:pointer; transition:all .15s;
   }
   .btn-modo-abono.activo{ border-color:var(--brand-dark); background:var(--brand-soft); color:var(--brand-dark); }
@@ -393,7 +432,7 @@
   }
   .banner .b-ico{font-size:19px; line-height:1;}
   .banner .b-txt{flex:1; font-size:12.5px; color:#7A5E08; line-height:1.4; font-weight:600;}
-  .banner button{background:#fff; border:1px solid #E4CE8E; color:#7A5E08; padding:7px 11px; font-size:12px; border-radius:9px;}
+  .banner button{background:var(--surface); border:1px solid #E4CE8E; color:#7A5E08; padding:7px 11px; font-size:12px; border-radius:9px;}
 
   .switch-row{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:4px 0;}
   .switch-row .s-txt{font-size:13.5px; font-weight:700;}
@@ -487,7 +526,7 @@
 
 <!-- Aviso de ayuda por WhatsApp (se muestra al entrar a la app) -->
 <div id="ccAyuda" style="display:none; position:fixed; inset:0; z-index:9995; background:rgba(0,0,0,.55); align-items:center; justify-content:center; padding:24px;">
-  <div style="background:#fff; border-radius:20px; padding:26px 24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+  <div style="background:var(--surface); border-radius:20px; padding:26px 24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
     <div style="font-size:44px; margin-bottom:10px;">💬</div>
     <div style="font-size:18px; font-weight:800; color:var(--brand-dark); margin-bottom:10px;">¿Tienes dudas?</div>
     <div style="font-size:13.5px; color:var(--ink); line-height:1.55; margin-bottom:16px;">
@@ -500,7 +539,7 @@
     <div style="font-size:13.5px; color:var(--ink); line-height:1.55; margin-bottom:14px;">
       ☁️ Tus datos no están en la nube, recuerda guardar un respaldo periódicamente.
     </div>
-    <button onclick="ccAyudaGuardar()" style="width:100%; background:#fff; color:var(--brand-dark); border:1.5px solid var(--brand-dark); border-radius:12px; padding:12px; font-weight:800; cursor:pointer;">Guardar</button>
+    <button onclick="ccAyudaGuardar()" style="width:100%; background:var(--surface); color:var(--brand-dark); border:1.5px solid var(--brand-dark); border-radius:12px; padding:12px; font-weight:800; cursor:pointer;">Guardar</button>
 
     <button onclick="ccAyudaDespues()" style="width:100%; margin-top:16px; background:#EEF1F3; color:var(--ink); border:none; border-radius:12px; padding:13px; font-weight:700; cursor:pointer;">Después</button>
   </div>
@@ -598,6 +637,13 @@
           <span id="metasResumen" style="font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft); text-align:right;">$0 / $0</span>
         </div>
         <div id="metasBarsList"></div>
+      </div>
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px;">
+          <span style="font-weight:700; font-size:13.5px;">Inversiones</span>
+          <span id="inversionesResumen" style="font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft); text-align:right;">$0</span>
+        </div>
+        <div id="inversionesBarsList"></div>
       </div>
 
       <h2 class="section-title">Deudas<div class="rule"></div></h2>
@@ -924,9 +970,19 @@
           <div style="display:flex; flex-direction:column; gap:2px;"><span style="font-weight:700; font-size:13px;">Total a recibir</span><b id="invTotal" style="font-size:16px; word-break:break-word;">—</b></div>
           <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; font-size:12.5px; margin-top:10px; border-top:1px dashed var(--line); padding-top:8px;"><span class="hint" style="white-space:nowrap;">4x1000 estimado (informativo)</span><b style="color:var(--ink-mute); text-align:right;" id="inv4x1000">—</b></div>
         </div>
-        <div class="hint" style="margin-top:10px; line-height:1.5;">📌 El 4x1000 no está incluido arriba: solo aplicaría si al retirar todo superas $18.330.900 en el mes desde una cuenta no exenta. Te mostramos cuánto sería, solo para que lo tengas presente.</div>
+        <div class="hint" style="margin-top:10px; margin-bottom:14px; line-height:1.5;">📌 El 4x1000 no está incluido arriba: solo aplicaría si al retirar todo superas $18.330.900 en el mes desde una cuenta no exenta. Te mostramos cuánto sería, solo para que lo tengas presente.</div>
+
+        <label>Nombre de la inversión (opcional)</label>
+        <input type="text" id="invNombre" placeholder="Ej: CDT Bancolombia" style="margin-bottom:10px;">
+        <label>¿Qué día se hizo (o se hará) la inversión?</label>
+        <input type="date" id="invFecha" style="margin-bottom:12px;">
+        <button class="btn-primary" style="margin-top:0;" onclick="addInversion()">Agregar inversión</button>
+        <div class="hint" style="margin-top:8px; line-height:1.5;">Al agregarla, te avisamos un día antes de que se cumpla el plazo (ej: si es a 90 días, el aviso llega el día 89).</div>
       </div>
       </div>
+
+      <h2 class="section-title destacado">Tus inversiones<div class="rule"></div></h2>
+      <div id="inversionesList"></div>
 
       <h2 class="section-title plegable destacado" id="sec4x1000_titulo" role="button" tabindex="0" aria-expanded="false" onclick="ccTogglePlegable('sec4x1000')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ccTogglePlegable('sec4x1000');}"><svg class="chevron" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>Calculadora 4x1000<div class="rule"></div></h2>
       <div class="plegable-caja" id="sec4x1000">
@@ -949,7 +1005,18 @@
 
     <!-- ================= AJUSTES ================= -->
     <section class="view" id="view-ajustes">
-      <h2 class="section-title" style="margin-top:0;">Recordatorio de gastos<div class="rule"></div></h2>
+      <h2 class="section-title" style="margin-top:0;">Apariencia<div class="rule"></div></h2>
+      <div class="card">
+        <label style="margin-bottom:6px; display:block;">Tema de la app</label>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="temaBtnAuto" class="btn-modo-abono" onclick="ccSetTema('auto')" style="flex:1;">Automático</button>
+          <button type="button" id="temaBtnClaro" class="btn-modo-abono" onclick="ccSetTema('claro')" style="flex:1;">Claro</button>
+          <button type="button" id="temaBtnOscuro" class="btn-modo-abono" onclick="ccSetTema('oscuro')" style="flex:1;">Oscuro</button>
+        </div>
+        <div class="hint" style="margin-top:8px;">"Automático" sigue el modo oscuro/claro que tengas configurado en el celular.</div>
+      </div>
+
+      <h2 class="section-title">Recordatorio de gastos<div class="rule"></div></h2>
       <div class="card">
         <div class="hint" id="alarmaIntro" style="margin:0 0 12px; font-weight:600; color:var(--ink);">
           🔔 Activa las notificaciones para recibir tus recordatorios a tiempo, incluso con la app cerrada. Toca el botón y acepta el permiso.
@@ -1120,6 +1187,7 @@ function defaultState(){
     gastos: [],
     deudas: [],
     metas: [],
+    inversiones: [],   // cada una: {id, nombre, monto, tasaAnual, plazoDias, fecha}
     fondoEmergencia: { meses:3, ahorrado:0, aporteMensual:0, tasaAnual:0, historial:[] },
     mesActivo: MESES[new Date().getMonth()],
     anioActivo: ANIO_HOY,
@@ -1304,6 +1372,29 @@ function ccTogglePlegable(idCaja){
 }
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+const CC_TEMA_KEY = "cc_tema";
+function ccAplicarTema(modo){
+  const root = document.documentElement;
+  if(modo === "oscuro") root.setAttribute("data-theme","dark");
+  else if(modo === "claro") root.setAttribute("data-theme","light");
+  else root.removeAttribute("data-theme");
+  ["temaBtnAuto","temaBtnClaro","temaBtnOscuro"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.classList.remove("activo");
+  });
+  const idBtn = modo==="oscuro" ? "temaBtnOscuro" : modo==="claro" ? "temaBtnClaro" : "temaBtnAuto";
+  const btn = document.getElementById(idBtn);
+  if(btn) btn.classList.add("activo");
+}
+function ccSetTema(modo){
+  try{ localStorage.setItem(CC_TEMA_KEY, modo); }catch(e){}
+  ccAplicarTema(modo);
+}
+function ccCargarTema(){
+  let modo = "auto";
+  try{ modo = localStorage.getItem(CC_TEMA_KEY) || "auto"; }catch(e){}
+  ccAplicarTema(modo);
+}
 function toast(msg){
   const t = document.getElementById("toast");
   t.textContent = msg; t.classList.add("show");
@@ -1857,6 +1948,25 @@ function renderDashboard(){
       return `<div class="bar-row">
         <div class="bar-label"><span>${esc(m.nombre)}</span><span>${pct(av)}</span></div>
         <div class="bar-track"><div class="bar-fill ok" style="width:${av}%"></div></div>
+      </div>`;
+    }).join("");
+  }
+
+  // inversiones: una barra individual por cada una, con el tiempo transcurrido del plazo
+  const invTotalInvertido = (state.inversiones||[]).reduce((s,i)=>s+(i.monto||0),0);
+  document.getElementById("inversionesResumen").textContent = money(invTotalInvertido) + " invertidos";
+  const inversionesBarsBox = document.getElementById("inversionesBarsList");
+  if(!state.inversiones || state.inversiones.length===0){
+    inversionesBarsBox.innerHTML = `<div class="hint">Aún no tienes inversiones. Créalas en la pestaña Ahorros.</div>`;
+  } else {
+    inversionesBarsBox.innerHTML = state.inversiones.map(inv=>{
+      const dias = inv.plazoDias || 1;
+      const diasRest = ccInversionDiasRestantes(inv);
+      const transcurrido = Math.min(100, Math.max(0, (1 - diasRest/dias) * 100));
+      const etiqueta = diasRest >= 0 ? diasRest+" día"+(diasRest===1?"":"s")+" restantes" : "vencida";
+      return `<div class="bar-row">
+        <div class="bar-label"><span>${esc(inv.nombre || "Inversión")}</span><span>${etiqueta}</span></div>
+        <div class="bar-track"><div class="bar-fill save" style="width:${transcurrido}%"></div></div>
       </div>`;
     }).join("");
   }
@@ -3507,6 +3617,80 @@ function calcularInversion(){
   document.getElementById("invTotal").textContent = money(total)+" al vencimiento";
   document.getElementById("inv4x1000").textContent = "-"+money(cuatroPorMil)+" si aplica";
 }
+/* ===== Inversiones guardadas (CDT, fondos, acciones) ===== */
+function calcularRendimientoInversion(monto, tasaPct, dias){
+  const i = (tasaPct||0)/100;
+  const bruto = monto*(Math.pow(1+i, dias/365)-1);
+  const retencion = bruto*0.04;
+  const neto = bruto-retencion;
+  const total = monto+neto;
+  return { bruto, retencion, neto, total };
+}
+function ccInversionVencimiento(inv){
+  const inicio = new Date((inv.fecha||new Date().toISOString().slice(0,10))+"T00:00:00");
+  return new Date(inicio.getTime() + (inv.plazoDias||0)*86400000);
+}
+function ccInversionDiasRestantes(inv){
+  const venc = ccInversionVencimiento(inv);
+  return Math.ceil((venc.getTime() - Date.now())/86400000);
+}
+function addInversion(){
+  const monto = numFromMasked("invMonto");
+  const tasa = parseFloat((document.getElementById("invTasa").value||"").replace(",","."))||0;
+  const dias = parseInt(document.getElementById("invPlazo").value,10)||0;
+  const nombre = document.getElementById("invNombre").value.trim();
+  const fecha = document.getElementById("invFecha").value || new Date().toISOString().slice(0,10);
+  if(monto<=0 || tasa<=0 || dias<=0){ toast("Completa el monto, la tasa y el plazo."); return; }
+  state.inversiones.push({ id: uid(), nombre, monto, tasaAnual: tasa, plazoDias: dias, fecha });
+  document.getElementById("invNombre").value = "";
+  saveState();
+  renderInversiones();
+  renderDashboard();
+  programarAlarma();
+  toast("Inversión agregada ✓ Te avisamos un día antes de que se cumpla el plazo.");
+}
+function deleteInversion(id){
+  state.inversiones = state.inversiones.filter(i=>i.id!==id);
+  limpiarPendiente("inversion:"+id);
+  saveState();
+  renderInversiones();
+  renderDashboard();
+  programarAlarma();
+}
+function renderInversiones(){
+  const box = document.getElementById("inversionesList");
+  if(!box) return;
+  if(!state.inversiones || state.inversiones.length===0){
+    box.innerHTML = `<div class="empty-state">Aún no tienes inversiones registradas.<br>Agrégalas arriba, en la calculadora de Inversiones.</div>`;
+    return;
+  }
+  box.innerHTML = state.inversiones.slice().sort((a,b)=>(a.fecha||"").localeCompare(b.fecha||"")).map(inv=>{
+    const venc = ccInversionVencimiento(inv);
+    const diasRest = ccInversionDiasRestantes(inv);
+    const c = calcularRendimientoInversion(inv.monto, inv.tasaAnual, inv.plazoDias);
+    const vencTxt = venc.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
+    let estadoTxt, estadoColor;
+    if(diasRest > 1){ estadoTxt = `Vence en ${diasRest} días (${vencTxt})`; estadoColor = "var(--ink-soft)"; }
+    else if(diasRest === 1){ estadoTxt = `Vence mañana (${vencTxt})`; estadoColor = "#C9701F"; }
+    else if(diasRest === 0){ estadoTxt = `Vence hoy (${vencTxt})`; estadoColor = "#C9701F"; }
+    else { estadoTxt = `Venció hace ${Math.abs(diasRest)} día${Math.abs(diasRest)===1?"":"s"} (${vencTxt})`; estadoColor = "var(--ink-mute)"; }
+    return `<div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="font-weight:700; font-size:14.5px;">${esc(inv.nombre || "Inversión")}</div>
+          <div class="hint" style="margin-top:2px; color:${estadoColor};">${estadoTxt}</div>
+        </div>
+        ${esPendiente("inversion:"+inv.id)
+          ? `<button class="r-del confirm" onclick="deleteInversion('${inv.id}')">✓ Eliminar</button>`
+          : `<button class="r-del" onclick="pideConfirmar('inversion:${inv.id}', renderInversiones)" aria-label="Eliminar">×</button>`}
+      </div>
+      <div style="margin-top:10px; display:flex; justify-content:space-between; font-size:13px;"><span class="hint">Monto invertido</span><b>${money(inv.monto)}</b></div>
+      <div style="margin-top:4px; display:flex; justify-content:space-between; font-size:13px;"><span class="hint">Tasa E.A. / Plazo</span><b>${inv.tasaAnual}% · ${inv.plazoDias} días</b></div>
+      <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); display:flex; justify-content:space-between; font-size:13px;"><span class="hint">Rendimiento neto esperado</span><b style="color:var(--brand-dark);">${money(c.neto)}</b></div>
+      <div style="margin-top:4px; display:flex; justify-content:space-between; font-size:13.5px;"><span style="font-weight:700;">Total al vencimiento</span><b>${money(c.total)}</b></div>
+    </div>`;
+  }).join("");
+}
 /* ===== Calculadora del 4x1000 (independiente, informativa) ===== */
 function calcular4x1000(){
   const consEl = document.getElementById("c4Consignado");
@@ -3577,7 +3761,7 @@ function pedirConfirmarAbonoCapital(id){
   overlay.id = "modalAbonoCapital";
   overlay.style.cssText = "position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:24px;";
   overlay.innerHTML = `
-    <div style="background:#fff; border-radius:20px; padding:24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+    <div style="background:var(--surface); border-radius:20px; padding:24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
       <div style="font-size:44px; margin-bottom:8px;">💰</div>
       <div style="font-size:18px; font-weight:800; color:var(--brand-dark); margin-bottom:10px;">Abono directo a capital</div>
       <div style="font-size:13.5px; color:var(--ink); line-height:1.55; margin-bottom:8px;">
@@ -4136,6 +4320,7 @@ function renderAhorros(){
   if(document.activeElement !== inpT) inpT.value = state.fondoEmergencia.tasaAnual || "";
   renderAhorrosLigero();
   renderFeHistorial();
+  renderInversiones();
 
   const box = document.getElementById("metasList");
   if(state.metas.length===0){
@@ -4413,7 +4598,7 @@ function ccDescargarActualizacion(url){
 
   // Si ya se hizo un respaldo hoy, no volver a interrumpir: ir directo a la actualización.
   if(dias === 0){
-    abrirDescargaExterna(url);
+    ccDescargarEInstalarAPK(url);
     return;
   }
 
@@ -4425,7 +4610,7 @@ function ccDescargarActualizacion(url){
   overlay.id = "modalRespaldoUpdate";
   overlay.style.cssText = "position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:24px;";
   overlay.innerHTML = `
-    <div style="background:#fff; border-radius:20px; padding:24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+    <div style="background:var(--surface); border-radius:20px; padding:24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
       <div style="font-size:44px; margin-bottom:8px;">💾</div>
       <div style="font-size:18px; font-weight:800; color:var(--brand-dark); margin-bottom:10px;">Antes de actualizar</div>
       <div style="font-size:13.5px; color:var(--ink); line-height:1.55; margin-bottom:8px;">
@@ -4434,7 +4619,7 @@ function ccDescargarActualizacion(url){
       <div style="font-size:12px; color:var(--ink-soft); margin-bottom:16px;">La actualización normalmente conserva tus datos, pero un respaldo te protege por si acaso.</div>
       <div style="display:flex; flex-direction:column; gap:9px;">
         <button onclick="ccRespaldarYActualizar('${esc(url)}')" style="background:var(--brand-dark); color:#fff; border:none; border-radius:12px; padding:13px; font-weight:800; cursor:pointer;">💾 Respaldar y luego actualizar</button>
-        <button onclick="ccCerrarModalRespUpd(); abrirDescargaExterna('${esc(url)}');" style="background:#EEF1F3; color:var(--ink); border:none; border-radius:12px; padding:12px; font-weight:700; cursor:pointer;">Actualizar sin respaldar</button>
+        <button onclick="ccCerrarModalRespUpd(); ccDescargarEInstalarAPK('${esc(url)}');" style="background:#EEF1F3; color:var(--ink); border:none; border-radius:12px; padding:12px; font-weight:700; cursor:pointer;">Actualizar sin respaldar</button>
         <button onclick="ccCerrarModalRespUpd()" style="background:transparent; color:var(--ink-soft); border:none; padding:6px; font-weight:600; cursor:pointer;">Cancelar</button>
       </div>
     </div>`;
@@ -4448,7 +4633,7 @@ async function ccRespaldarYActualizar(url){
   ccCerrarModalRespUpd();
   toast("Guarda tu respaldo. La actualización se abrirá cuando termines…");
   await exportBackupJSON();   // espera de verdad a que el usuario elija dónde guardar/compartir
-  abrirDescargaExterna(url);
+  ccDescargarEInstalarAPK(url);
 }
 
 /* Abre el APK en el navegador del SISTEMA (Chrome), que sí tiene
@@ -4465,6 +4650,81 @@ function abrirDescargaExterna(url){
     const w = window.open(url, "_system");
     if(!w) location.href = url;
   }catch(e){ location.href = url; }
+}
+
+/* ===== Descarga e instalación del APK DENTRO de la app (sin salir al navegador) =====
+   Solo funciona en el APK de Android con el plugin FileOpener instalado.
+   Si algo falla o no está disponible, cae de vuelta al método viejo (abrir navegador). */
+function ccArrayBufferABase64(buffer){
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000; // en bloques, para no reventar la pila con archivos grandes
+  for(let i=0; i<bytes.length; i+=chunkSize){
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunkSize));
+  }
+  return btoa(binary);
+}
+function ccMostrarModalDescargaApk(){
+  ccCerrarModalDescargaApk();
+  const overlay = document.createElement("div");
+  overlay.id = "modalDescargaApk";
+  overlay.style.cssText = "position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:24px;";
+  overlay.innerHTML = `
+    <div style="background:var(--surface); border-radius:20px; padding:26px 24px; max-width:320px; width:100%; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+      <div style="font-size:38px; margin-bottom:8px;">⬇️</div>
+      <div style="font-size:15.5px; font-weight:800; color:var(--brand-dark); margin-bottom:16px;" id="descApkTitulo">Descargando actualización…</div>
+      <div style="background:var(--surface-2); border-radius:100px; height:10px; overflow:hidden; margin-bottom:10px;">
+        <div id="descApkBarra" style="background:var(--brand-dark); height:100%; width:0%; transition:width .2s; border-radius:100px;"></div>
+      </div>
+      <div style="font-size:12.5px; color:var(--ink-soft);" id="descApkPct">0%</div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function ccActualizarProgresoApk(pct, texto){
+  const barra = document.getElementById("descApkBarra");
+  const pctEl = document.getElementById("descApkPct");
+  const tituloEl = document.getElementById("descApkTitulo");
+  if(barra) barra.style.width = Math.max(0, Math.min(100, pct)) + "%";
+  if(pctEl) pctEl.textContent = Math.round(pct) + "%";
+  if(texto && tituloEl) tituloEl.textContent = texto;
+}
+function ccCerrarModalDescargaApk(){
+  const m = document.getElementById("modalDescargaApk");
+  if(m) m.remove();
+}
+async function ccDescargarEInstalarAPK(url){
+  // Este flujo solo aplica dentro del APK de Android. En navegador o si falta el plugin, seguimos con el método viejo.
+  const FS = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem;
+  const FO = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.FileOpener;
+  if(!esAndroidNativo() || !FS || !FO){ abrirDescargaExterna(url); return; }
+
+  ccMostrarModalDescargaApk();
+  try{
+    const resp = await fetch(url);
+    if(!resp.ok || !resp.body) throw new Error("La descarga falló (" + resp.status + ")");
+    const total = Number(resp.headers.get("Content-Length")) || 0;
+    const reader = resp.body.getReader();
+    const partes = [];
+    let recibido = 0;
+    while(true){
+      const { done, value } = await reader.read();
+      if(done) break;
+      partes.push(value);
+      recibido += value.length;
+      if(total) ccActualizarProgresoApk((recibido/total)*90, "Descargando actualización…");
+    }
+    ccActualizarProgresoApk(93, "Preparando instalación…");
+    const buffer = await new Blob(partes).arrayBuffer();
+    const base64 = ccArrayBufferABase64(buffer);
+    const res = await FS.writeFile({ path: "CuentasClaras-update.apk", data: base64, directory: "CACHE" });
+    ccActualizarProgresoApk(100, "Abriendo instalador…");
+    await FO.open({ filePath: res.uri, contentType: "application/vnd.android.package-archive", openWithDefault: true });
+    ccCerrarModalDescargaApk();
+  }catch(e){
+    ccCerrarModalDescargaApk();
+    toast("No se pudo descargar dentro de la app. Se abrirá en el navegador.");
+    abrirDescargaExterna(url);
+  }
 }
 
 /* =====================================================================
@@ -4800,6 +5060,24 @@ async function ccReprogramarNativo(){
           extra: { rubroNombre: r.nombre }
         });
       }
+    }
+  });
+
+  // Notificaciones de vencimiento de inversiones: un día antes de cumplirse el plazo
+  (state.inversiones||[]).forEach((inv, ii)=>{
+    if(!inv.fecha || !inv.plazoDias || lista.length >= CC_MAX_NOTIFS) return;
+    const vencimiento = ccInversionVencimiento(inv);
+    const aviso = new Date(vencimiento.getTime() - 24*60*60*1000);
+    if(aviso > new Date()){
+      lista.push({
+        id: 700000 + ii,   // rango propio para inversiones
+        title: "📈 Tu inversión se cumple mañana",
+        body: (inv.nombre ? inv.nombre+": " : "")+"mañana se cumple el plazo de tu inversión de "+money(inv.monto)+".",
+        channelId: "cc-recordatorios",
+        schedule: { at: aviso, allowWhileIdle: true },
+        smallIcon: "ic_launcher",
+        extra: { inversionId: inv.id }
+      });
     }
   });
 
@@ -5322,6 +5600,7 @@ function renderAll(){
 
 document.getElementById("gFecha").value = new Date().toISOString().slice(0,10);
 document.getElementById("feAporteFechaNueva").value = new Date().toISOString().slice(0,10);
+document.getElementById("invFecha").value = new Date().toISOString().slice(0,10);
 ["gMonto","dInicial","dSaldo","dPago","feAhorrado","feAporte","feAporteMontoNuevo","mObjetivo","mAhorrado","newIngresoMonto","invMonto","c4Monto"].forEach(id=>{
   const el = document.getElementById(id);
   if(el) maskMiles(el);
@@ -5455,6 +5734,7 @@ function ccLlenarDiasPago(){
 }
 ccLlenarDiasPago();
 
+ccCargarTema();
 ccMostrarWelcomeSiPrimeraVez();
 setTimeout(ccMostrarAyudaSiListo, 900);
 
