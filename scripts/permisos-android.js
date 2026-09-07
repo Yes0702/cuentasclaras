@@ -1,36 +1,23 @@
-/* Añade al AndroidManifest.xml los permisos que necesitan las alarmas.
-   Se ejecuta solo, después de "npx cap add android". Es idempotente. */
+// Agrega los permisos de alarmas exactas y notificaciones al AndroidManifest
 const fs = require("fs");
-const RUTA = "android/app/src/main/AndroidManifest.xml";
-
-const PERMISOS = [
-  "android.permission.POST_NOTIFICATIONS",
-  "android.permission.SCHEDULE_EXACT_ALARM",
-  "android.permission.RECEIVE_BOOT_COMPLETED",
-  "android.permission.VIBRATE",
-  "android.permission.WAKE_LOCK",
-  "android.permission.USE_BIOMETRIC"
-];
-
-if (!fs.existsSync(RUTA)) {
-  console.error("No encuentro " + RUTA + ". ¿Corriste 'npx cap add android' antes?");
-  process.exit(1);
+const path = "android/app/src/main/AndroidManifest.xml";
+try{
+  let m = fs.readFileSync(path, "utf8");
+  const permisos = [
+    '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>',
+    '<uses-permission android:name="android.permission.USE_EXACT_ALARM"/>',
+    '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
+    '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>',
+    '<uses-permission android:name="android.permission.VIBRATE"/>',
+    '<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>'
+  ];
+  permisos.forEach(p=>{
+    if(!m.includes(p)){
+      m = m.replace("<application", p + "\n    <application");
+    }
+  });
+  fs.writeFileSync(path, m);
+  console.log("Permisos de alarmas agregados al AndroidManifest");
+}catch(e){
+  console.log("No se pudo modificar el manifest (puede que aún no exista):", e.message);
 }
-
-let xml = fs.readFileSync(RUTA, "utf8");
-const faltantes = PERMISOS.filter((p) => !xml.includes('"' + p + '"'));
-
-if (!faltantes.length) {
-  console.log("Los permisos ya estaban puestos. Nada que hacer.");
-  process.exit(0);
-}
-
-const bloque = faltantes
-  .map((p) => '    <uses-permission android:name="' + p + '" />')
-  .join("\n");
-
-// se insertan justo antes del cierre de <manifest>
-xml = xml.replace(/<\/manifest>/, bloque + "\n</manifest>");
-fs.writeFileSync(RUTA, xml, "utf8");
-
-console.log("Permisos agregados:\n" + faltantes.map((p) => "  - " + p).join("\n"));
