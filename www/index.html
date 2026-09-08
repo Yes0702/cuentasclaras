@@ -4480,50 +4480,59 @@ let ccTipoCreditoActual = "fija";
 let ccUltimoCalculoCredito = null;
 let ccComparadorCreditos = [];
 
-/* ---- Consulta automática del valor de la UVR: Banco de la República, luego Datos Abiertos Colombia, luego manual ---- */
+/* ---- Consulta automática del valor de la UVR: Banco de la República, luego Datos Abiertos Colombia, luego manual ----
+   Cada función devuelve { valor, error } — error describe el paso exacto que falló, para poder diagnosticar. */
 async function ccConsultarUVRBanrep(){
-  try{
-    const url = "https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/ESTAT,DF_UVR_DAILY_LATEST,1.0/all/ALL/?dimensionAtObservation=TIME_PERIOD&detail=full";
-    const resp = await ccFetchConTimeout(url, {}, 6000);
-    if(!resp || !resp.ok) return null;
-    const texto = await resp.text();
-    const valores = Array.from(texto.matchAll(/ObsValue[^>]*value="([\d.]+)"/g)).map(m=>parseFloat(m[1]));
-    const plausible = valores.filter(v=> v>200 && v<800);   // descarta la variación % (APC) y se queda con pesos por UVR (CRVU)
-    return plausible.length ? plausible[0] : null;
-  }catch(e){ return null; }
+  const url = "https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/ESTAT,DF_UVR_DAILY_LATEST,1.0/all/ALL/?dimensionAtObservation=TIME_PERIOD&detail=full";
+  let resp;
+  try{ resp = await ccFetchConTimeout(url, {}, 8000); }
+  catch(e){ return { valor:null, error:"excepción de red: "+(e&&e.message||e) }; }
+  if(!resp) return { valor:null, error:"sin respuesta (tiempo agotado o bloqueado)" };
+  if(!resp.ok) return { valor:null, error:"respondió con error HTTP "+resp.status };
+  let texto;
+  try{ texto = await resp.text(); }catch(e){ return { valor:null, error:"no se pudo leer el cuerpo de la respuesta" }; }
+  const valores = Array.from(texto.matchAll(/ObsValue[^>]*value="([\d.]+)"/g)).map(m=>parseFloat(m[1]));
+  if(!valores.length) return { valor:null, error:"respondió pero sin ObsValue reconocible (cambió el formato)" };
+  const plausible = valores.filter(v=> v>200 && v<800);
+  if(!plausible.length) return { valor:null, error:"respondió pero ningún valor cae en el rango esperado de UVR" };
+  return { valor: plausible[0], error:null };
 }
 async function ccConsultarUVRDatosGov(){
-  try{
-    const url = "https://www.datos.gov.co/resource/mtic-nvgq.json?$order=:id DESC&$limit=5";
-    const resp = await ccFetchConTimeout(url, {}, 6000);
-    if(!resp || !resp.ok) return null;
-    const datos = await resp.json();
-    if(!Array.isArray(datos) || !datos.length) return null;
-    for(const fila of datos){
-      for(const key in fila){
-        const v = parseFloat(fila[key]);
-        if(!isNaN(v) && v>200 && v<800) return v;
-      }
+  const url = "https://www.datos.gov.co/resource/mtic-nvgq.json?$order=:id DESC&$limit=5";
+  let resp;
+  try{ resp = await ccFetchConTimeout(url, {}, 8000); }
+  catch(e){ return { valor:null, error:"excepción de red: "+(e&&e.message||e) }; }
+  if(!resp) return { valor:null, error:"sin respuesta (tiempo agotado o bloqueado)" };
+  if(!resp.ok) return { valor:null, error:"respondió con error HTTP "+resp.status };
+  let datos;
+  try{ datos = await resp.json(); }catch(e){ return { valor:null, error:"la respuesta no es JSON válido" }; }
+  if(!Array.isArray(datos) || !datos.length) return { valor:null, error:"respondió pero sin filas de datos" };
+  for(const fila of datos){
+    for(const key in fila){
+      const v = parseFloat(fila[key]);
+      if(!isNaN(v) && v>200 && v<800) return { valor:v, error:null };
     }
-    return null;
-  }catch(e){ return null; }
+  }
+  return { valor:null, error:"respondió pero ningún campo cae en el rango esperado de UVR" };
 }
 async function ccActualizarUVR(){
   const btn = document.getElementById("credBtnUvr");
   const campo = document.getElementById("credUvrHoy");
   if(btn){ btn.disabled = true; btn.textContent = "Consultando..."; }
-  let valor = await ccConsultarUVRBanrep();
-  let fuente = "el Banco de la República";
+  const r1 = await ccConsultarUVRBanrep();
+  let valor = r1.valor, fuente = "el Banco de la República";
+  let detalle = valor ? null : "Banrep: "+r1.error;
   if(!valor){
-    valor = await ccConsultarUVRDatosGov();
-    fuente = "Datos Abiertos Colombia";
+    const r2 = await ccConsultarUVRDatosGov();
+    valor = r2.valor; fuente = "Datos Abiertos Colombia";
+    if(!valor) detalle += " · Datos Abiertos: "+r2.error;
   }
   if(btn){ btn.disabled = false; btn.textContent = "🔄 Actualizar UVR"; }
   if(valor){
     campo.value = valor.toFixed(2);
     toast("UVR actualizada desde " + fuente + ": " + valor.toFixed(2));
   } else {
-    toast("No se pudo consultar ninguna fuente. Ingresa el valor a mano.");
+    toast("No se pudo consultar. " + detalle);
   }
 }
 
