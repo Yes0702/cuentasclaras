@@ -4485,9 +4485,13 @@ let ccComparadorCreditos = [];
    automático de fetch), y si no está disponible (navegador/PWA), cae a fetch normal con timeout. */
 async function ccPeticionHttp(url){
   const CH = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.CapacitorHttp;
+  const encabezados = {
+    "Accept": "application/json, application/xml, text/xml, */*",
+    "User-Agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
+  };
   if(CH && CH.request){
     try{
-      const res = await CH.request({ url, method:"GET", connectTimeout:8000, readTimeout:8000 });
+      const res = await CH.request({ url, method:"GET", headers:encabezados, connectTimeout:8000, readTimeout:8000 });
       if(res && res.status>=200 && res.status<300){
         const texto = typeof res.data==="string" ? res.data : JSON.stringify(res.data);
         return { texto, error:null };
@@ -4497,7 +4501,7 @@ async function ccPeticionHttp(url){
   }
   // Sin el plugin nativo (navegador/PWA): fetch normal con límite de tiempo
   try{
-    const resp = await ccFetchConTimeout(url, {}, 8000);
+    const resp = await ccFetchConTimeout(url, { headers:encabezados }, 8000);
     if(!resp) return { texto:null, error:"sin respuesta (tiempo agotado o bloqueado)" };
     if(!resp.ok) return { texto:null, error:"respondió con error HTTP "+resp.status };
     const texto = await resp.text();
