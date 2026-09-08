@@ -935,7 +935,8 @@
             <div><label>Valor UVR hoy</label><input type="text" inputmode="decimal" id="credUvrHoy" class="mono-input" placeholder="Ej: 413.76"></div>
             <div><label>Inflación anual asumida</label><input type="text" inputmode="decimal" id="credInflacion" class="mono-input" placeholder="Ej: 5.6"></div>
           </div>
-          <button type="button" id="credBtnUvr" class="btn-outline" style="width:100%; margin:0 0 10px;" onclick="ccActualizarUVR()">🔄 Actualizar UVR</button>
+          <button type="button" id="credBtnUvr" class="btn-outline" style="width:100%; margin:0 0 8px;" onclick="ccActualizarUVR()">🔄 Actualizar UVR</button>
+          <div class="hint" style="text-align:center; margin-bottom:10px;">¿No funcionó? <a href="#" onclick="event.preventDefault(); abrirExterno('https://www.larepublica.co/indicadores-economicos/bancos/uvr');" style="color:var(--brand-dark); font-weight:700;">Ver valor actual de la UVR →</a></div>
         </div>
 
         <button class="btn-primary" style="margin-top:2px;" onclick="ccCalcularCredito()">Calcular</button>
