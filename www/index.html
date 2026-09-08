@@ -896,6 +896,73 @@
 
       <h2 class="section-title">Tus deudas<div class="rule"></div></h2>
       <div id="deudasList"></div>
+
+      <h2 class="section-title plegable destacado" id="secCredito_titulo" role="button" tabindex="0" aria-expanded="false" onclick="ccTogglePlegable('secCredito')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ccTogglePlegable('secCredito');}"><svg class="chevron" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>Calculadora de crédito<div class="rule"></div></h2>
+      <div class="plegable-caja" id="secCredito">
+      <div class="card">
+        <div style="font-weight:700; font-size:14.5px; color:var(--brand-dark); margin-bottom:10px;">🏦 ¿Cuánto te costaría ese préstamo?</div>
+
+        <div style="display:flex; border:1.5px solid var(--line); border-radius:11px; overflow:hidden; margin-bottom:12px;">
+          <button type="button" id="credTipoFija" class="btn-modo-abono activo" onclick="ccSetTipoCredito('fija')" style="flex:1; border:none; border-radius:0;">Fija (pesos)</button>
+          <button type="button" id="credTipoUvr" class="btn-modo-abono" onclick="ccSetTipoCredito('uvr')" style="flex:1; border:none; border-radius:0;">UVR (vivienda)</button>
+        </div>
+
+        <label>Nombre de la entidad (opcional)</label>
+        <input type="text" id="credEntidad" placeholder="Ej: Bancolombia" style="margin-bottom:10px;">
+
+        <label>Monto a solicitar</label>
+        <input type="text" inputmode="numeric" id="credMonto" class="mono-input" placeholder="0" style="margin-bottom:10px;">
+
+        <div class="field-row" style="margin-bottom:10px;">
+          <div>
+            <label id="credTasaLabel">Tasa E.A.</label>
+            <input type="text" inputmode="decimal" id="credTasa" class="mono-input" placeholder="Ej: 24">
+          </div>
+          <div id="credTasaTipoBox">
+            <label>Tipo de tasa</label>
+            <select id="credTasaTipo" class="mono-input">
+              <option value="ea">E.A. (anual)</option>
+              <option value="mv">M.V. (mensual)</option>
+            </select>
+          </div>
+        </div>
+
+        <label>Plazo (meses)</label>
+        <input type="number" min="1" id="credPlazo" class="mono-input" placeholder="Ej: 24" style="margin-bottom:10px;">
+
+        <div id="credCamposUvr" style="display:none;">
+          <div class="field-row" style="margin-bottom:8px;">
+            <div><label>Valor UVR hoy</label><input type="text" inputmode="decimal" id="credUvrHoy" class="mono-input" placeholder="Ej: 413.76"></div>
+            <div><label>Inflación anual asumida</label><input type="text" inputmode="decimal" id="credInflacion" class="mono-input" placeholder="Ej: 5.6"></div>
+          </div>
+          <button type="button" id="credBtnUvr" class="btn-outline" style="width:100%; margin:0 0 10px;" onclick="ccActualizarUVR()">🔄 Actualizar UVR</button>
+        </div>
+
+        <button class="btn-primary" style="margin-top:2px;" onclick="ccCalcularCredito()">Calcular</button>
+
+        <div id="credResultado" style="display:none; margin-top:14px;">
+          <div style="background:var(--surface-2); border-radius:12px; padding:12px 14px;" id="credResumenBox"></div>
+
+          <div id="credAvisoUvr" style="display:none; margin-top:10px; display:flex; gap:8px; background:var(--amber-soft); border-radius:11px; padding:10px 12px;">
+            <span style="font-size:15px;">⚠️</span>
+            <div class="hint" style="color:#7A5E08; margin:0;">Esto es una proyección basada en la inflación que asumiste. La cuota real depende de la inflación real de cada mes.</div>
+          </div>
+
+          <div style="margin-top:12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;" onclick="ccToggleTablaCredito()">
+            <span style="font-weight:700; font-size:13px;">Tabla mes a mes</span>
+            <span id="credChevTabla" style="font-size:13px; color:var(--ink-mute);">▾</span>
+          </div>
+          <div id="credTablaBox" style="display:none; margin-top:8px; max-height:260px; overflow-y:auto;"></div>
+
+          <div style="display:flex; gap:8px; margin-top:14px;">
+            <button class="btn-primary" style="margin:0; flex:1;" onclick="ccAgregarCreditoComoDeuda()">Agregar como deuda</button>
+            <button class="btn-outline" style="margin:0; flex:1;" onclick="ccAgregarAComparador()">Comparar</button>
+          </div>
+        </div>
+
+        <div id="credComparadorBox" style="margin-top:16px;"></div>
+      </div>
+      </div>
     </section>
 
     <!-- ================= AHORROS ================= -->
@@ -4408,6 +4475,213 @@ function renderInversiones(){
     </div>`;
   }).join("");
 }
+/* ===== Calculadora de crédito (fija en pesos o UVR para vivienda) ===== */
+let ccTipoCreditoActual = "fija";
+let ccUltimoCalculoCredito = null;
+let ccComparadorCreditos = [];
+
+/* ---- Consulta automática del valor de la UVR: Banco de la República, luego Datos Abiertos Colombia, luego manual ---- */
+async function ccConsultarUVRBanrep(){
+  try{
+    const url = "https://totoro.banrep.gov.co/nsi-jax-ws/rest/data/ESTAT,DF_UVR_DAILY_LATEST,1.0/all/ALL/?dimensionAtObservation=TIME_PERIOD&detail=full";
+    const resp = await ccFetchConTimeout(url, {}, 6000);
+    if(!resp || !resp.ok) return null;
+    const texto = await resp.text();
+    const valores = Array.from(texto.matchAll(/ObsValue[^>]*value="([\d.]+)"/g)).map(m=>parseFloat(m[1]));
+    const plausible = valores.filter(v=> v>200 && v<800);   // descarta la variación % (APC) y se queda con pesos por UVR (CRVU)
+    return plausible.length ? plausible[0] : null;
+  }catch(e){ return null; }
+}
+async function ccConsultarUVRDatosGov(){
+  try{
+    const url = "https://www.datos.gov.co/resource/mtic-nvgq.json?$order=:id DESC&$limit=5";
+    const resp = await ccFetchConTimeout(url, {}, 6000);
+    if(!resp || !resp.ok) return null;
+    const datos = await resp.json();
+    if(!Array.isArray(datos) || !datos.length) return null;
+    for(const fila of datos){
+      for(const key in fila){
+        const v = parseFloat(fila[key]);
+        if(!isNaN(v) && v>200 && v<800) return v;
+      }
+    }
+    return null;
+  }catch(e){ return null; }
+}
+async function ccActualizarUVR(){
+  const btn = document.getElementById("credBtnUvr");
+  const campo = document.getElementById("credUvrHoy");
+  if(btn){ btn.disabled = true; btn.textContent = "Consultando..."; }
+  let valor = await ccConsultarUVRBanrep();
+  let fuente = "el Banco de la República";
+  if(!valor){
+    valor = await ccConsultarUVRDatosGov();
+    fuente = "Datos Abiertos Colombia";
+  }
+  if(btn){ btn.disabled = false; btn.textContent = "🔄 Actualizar UVR"; }
+  if(valor){
+    campo.value = valor.toFixed(2);
+    toast("UVR actualizada desde " + fuente + ": " + valor.toFixed(2));
+  } else {
+    toast("No se pudo consultar ninguna fuente. Ingresa el valor a mano.");
+  }
+}
+
+function ccSetTipoCredito(tipo){
+  ccTipoCreditoActual = tipo;
+  document.getElementById("credTipoFija").classList.toggle("activo", tipo==="fija");
+  document.getElementById("credTipoUvr").classList.toggle("activo", tipo==="uvr");
+  document.getElementById("credCamposUvr").style.display = (tipo==="uvr") ? "block" : "none";
+  document.getElementById("credTasaTipoBox").style.display = (tipo==="uvr") ? "none" : "block";
+  document.getElementById("credTasaLabel").textContent = (tipo==="uvr") ? "Tasa E.A. sobre UVR" : "Tasa";
+  document.getElementById("credResultado").style.display = "none";
+}
+
+function ccAmortizarFija(monto, iMensual, n){
+  const cuota = iMensual>0 ? monto*iMensual/(1-Math.pow(1+iMensual,-n)) : monto/n;
+  let saldo = monto;
+  const tabla = [];
+  let totalIntereses = 0;
+  for(let m=1; m<=n; m++){
+    const interes = saldo*iMensual;
+    let capital = cuota - interes;
+    if(m===n) capital = saldo;   // ajuste final por redondeo
+    saldo = Math.max(0, saldo - capital);
+    totalIntereses += interes;
+    tabla.push({ mes:m, interes, capital, saldo, cuota: capital+interes });
+  }
+  return { cuota, totalPagado: monto+totalIntereses, totalIntereses, tabla, monto, plazo:n };
+}
+function ccAmortizarUVR(montoPesos, tasaEA, n, uvrHoy, inflacionAnual){
+  const montoUvr = montoPesos/uvrHoy;
+  const iMensualUvr = Math.pow(1+tasaEA, 1/12) - 1;
+  const cuotaUvr = iMensualUvr>0 ? montoUvr*iMensualUvr/(1-Math.pow(1+iMensualUvr,-n)) : montoUvr/n;
+  const inflacionMensual = Math.pow(1+inflacionAnual, 1/12) - 1;
+  let saldoUvr = montoUvr;
+  const tabla = [];
+  let totalPagadoPesos = 0;
+  for(let m=1; m<=n; m++){
+    const interesUvr = saldoUvr*iMensualUvr;
+    let capitalUvr = cuotaUvr - interesUvr;
+    if(m===n) capitalUvr = saldoUvr;
+    saldoUvr = Math.max(0, saldoUvr - capitalUvr);
+    const uvrProyectada = uvrHoy*Math.pow(1+inflacionMensual, m);
+    const cuotaPesos = (capitalUvr+interesUvr)*uvrProyectada;
+    totalPagadoPesos += cuotaPesos;
+    tabla.push({ mes:m, interes:interesUvr*uvrProyectada, capital:capitalUvr*uvrProyectada, saldo:saldoUvr*uvrProyectada, cuota:cuotaPesos });
+  }
+  return {
+    cuotaMes1: tabla[0].cuota, cuotaMesN: tabla[tabla.length-1].cuota, cuota: tabla[0].cuota,
+    totalPagado: totalPagadoPesos, totalIntereses: totalPagadoPesos-montoPesos,
+    tabla, monto: montoPesos, plazo:n
+  };
+}
+function ccCalcularCredito(){
+  const tipo = ccTipoCreditoActual;
+  const monto = numFromMasked("credMonto");
+  const tasaVal = parseFloat((document.getElementById("credTasa").value||"").replace(",","."))||0;
+  const plazo = parseInt(document.getElementById("credPlazo").value)||0;
+  if(monto<=0 || tasaVal<=0 || plazo<=0){ toast("Completa el monto, la tasa y el plazo."); return; }
+
+  let resultado;
+  if(tipo==="fija"){
+    const tipoTasa = document.getElementById("credTasaTipo").value;
+    const iMensual = tipoTasa==="ea" ? (Math.pow(1+tasaVal/100, 1/12)-1) : (tasaVal/100);
+    resultado = ccAmortizarFija(monto, iMensual, plazo);
+    resultado.tipo = "fija";
+  } else {
+    const uvrHoy = parseFloat((document.getElementById("credUvrHoy").value||"").replace(",","."))||0;
+    const inflacion = parseFloat((document.getElementById("credInflacion").value||"").replace(",","."))||0;
+    if(uvrHoy<=0){ toast("Ingresa el valor de la UVR de hoy."); return; }
+    resultado = ccAmortizarUVR(monto, tasaVal/100, plazo, uvrHoy, inflacion/100);
+    resultado.tipo = "uvr";
+  }
+  ccUltimoCalculoCredito = resultado;
+  ccRenderResultadoCredito(resultado);
+}
+function ccRenderResultadoCredito(r){
+  document.getElementById("credResultado").style.display = "block";
+  const resumen = document.getElementById("credResumenBox");
+  if(r.tipo==="fija"){
+    resumen.innerHTML = `
+      <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span class="hint">Cuota mensual</span><b>${money(r.cuota)}</b></div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span class="hint">Total a pagar</span><b>${money(r.totalPagado)}</b></div>
+      <div style="display:flex; justify-content:space-between;"><span class="hint">Total intereses</span><b style="color:#C9701F;">${money(r.totalIntereses)}</b></div>`;
+    document.getElementById("credAvisoUvr").style.display = "none";
+  } else {
+    resumen.innerHTML = `
+      <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span class="hint">Cuota mes 1 (aprox.)</span><b>${money(r.cuotaMes1)}</b></div>
+      <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span class="hint">Cuota mes ${r.plazo} (aprox.)</span><b>${money(r.cuotaMesN)}</b></div>
+      <div style="display:flex; justify-content:space-between;"><span class="hint">Total estimado</span><b>${money(r.totalPagado)}</b></div>`;
+    document.getElementById("credAvisoUvr").style.display = "flex";
+  }
+  document.getElementById("credTablaBox").style.display = "none";
+  document.getElementById("credChevTabla").textContent = "▾";
+  ccRenderTablaCredito(r);
+}
+function ccRenderTablaCredito(r){
+  const box = document.getElementById("credTablaBox");
+  box.innerHTML = `<table style="width:100%; font-size:11.5px; border-collapse:collapse;">
+    <tr style="color:var(--ink-mute);"><td style="padding:4px 2px;">Mes</td><td style="text-align:right;">Interés</td><td style="text-align:right;">Capital</td><td style="text-align:right;">Saldo</td></tr>
+    ${r.tabla.map(f=>`<tr style="border-top:1px solid var(--line-soft);"><td style="padding:4px 2px;">${f.mes}</td><td style="text-align:right;">${money(f.interes)}</td><td style="text-align:right;">${money(f.capital)}</td><td style="text-align:right;">${money(f.saldo)}</td></tr>`).join("")}
+  </table>`;
+}
+function ccToggleTablaCredito(){
+  const box = document.getElementById("credTablaBox");
+  const chev = document.getElementById("credChevTabla");
+  const abierta = box.style.display !== "none";
+  box.style.display = abierta ? "none" : "block";
+  chev.textContent = abierta ? "▾" : "▴";
+}
+function ccAgregarCreditoComoDeuda(){
+  if(!ccUltimoCalculoCredito) return;
+  const r = ccUltimoCalculoCredito;
+  const entidad = (document.getElementById("credEntidad").value||"").trim();
+  const nombre = entidad || (r.tipo==="uvr" ? "Crédito UVR" : "Crédito");
+  const cuotaInicial = r.tipo==="uvr" ? r.cuotaMes1 : r.cuota;
+  state.deudas.push({
+    id: uid(), nombre, inicial: r.monto, saldo: r.monto,
+    pago: Math.round(cuotaInicial), fecha:"", mesesObjetivo: r.plazo,
+    tasaAnual: 0, interesPagado: 0, diaPago: 0
+  });
+  saveState();
+  renderDeudas();
+  renderDashboard();
+  toast("Crédito agregado a tus deudas ✓" + (r.tipo==="uvr" ? " (con la cuota del mes 1; recuerda que va subiendo)" : ""));
+}
+function ccAgregarAComparador(){
+  if(!ccUltimoCalculoCredito) return;
+  if(ccComparadorCreditos.length>=3){ toast("Máximo 3 ofertas para comparar."); return; }
+  const entidad = (document.getElementById("credEntidad").value||"").trim();
+  const etiqueta = entidad || ((ccUltimoCalculoCredito.tipo==="uvr"?"UVR":"Fija")+" · Oferta "+(ccComparadorCreditos.length+1));
+  ccComparadorCreditos.push(Object.assign({}, ccUltimoCalculoCredito, { etiqueta }));
+  ccRenderComparadorCreditos();
+}
+function ccQuitarDeComparador(i){
+  ccComparadorCreditos.splice(i,1);
+  ccRenderComparadorCreditos();
+}
+function ccRenderComparadorCreditos(){
+  const box = document.getElementById("credComparadorBox");
+  if(ccComparadorCreditos.length===0){ box.innerHTML=""; return; }
+  const masBarata = ccComparadorCreditos.reduce((a,b)=> b.totalIntereses<a.totalIntereses ? b : a);
+  box.innerHTML = `<div style="font-weight:700; font-size:13px; margin-bottom:8px;">Comparando ${ccComparadorCreditos.length} oferta${ccComparadorCreditos.length===1?"":"s"}</div>
+    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px;">
+    ${ccComparadorCreditos.map((o,i)=>{
+      const esMasBarata = ccComparadorCreditos.length>1 && o===masBarata;
+      const cuotaTxt = o.tipo==="uvr" ? money(o.cuotaMes1)+" (mes 1)" : money(o.cuota);
+      return `<div style="border:${esMasBarata?"2px":"1px"} solid ${esMasBarata?"var(--brand-dark)":"var(--line)"}; border-radius:12px; padding:10px;">
+        ${esMasBarata?`<div style="font-size:9.5px; font-weight:800; color:var(--brand-dark); background:var(--brand-soft); display:inline-block; padding:2px 7px; border-radius:100px; margin-bottom:6px;">Más barata</div>`:""}
+        <div style="font-weight:700; font-size:12.5px; margin-bottom:2px; overflow-wrap:anywhere;">${esc(o.etiqueta)}</div>
+        <div class="hint" style="margin-bottom:6px;">${o.tipo==="uvr"?"UVR (proyección)":"Fija"}</div>
+        <div style="font-size:11.5px;">Cuota: <b>${cuotaTxt}</b></div>
+        <div style="font-size:11.5px;">Intereses: <b>${money(o.totalIntereses)}</b></div>
+        <button onclick="ccQuitarDeComparador(${i})" style="margin-top:6px; width:100%; background:transparent; border:none; color:var(--ink-mute); font-size:11px; cursor:pointer;">Quitar</button>
+      </div>`;
+    }).join("")}
+    </div>`;
+}
+
 /* ===== Calculadora del 4x1000 (independiente, informativa) ===== */
 function calcular4x1000(){
   const consEl = document.getElementById("c4Consignado");
@@ -6382,7 +6656,7 @@ function renderAll(){
 document.getElementById("gFecha").value = new Date().toISOString().slice(0,10);
 document.getElementById("feAporteFechaNueva").value = new Date().toISOString().slice(0,10);
 document.getElementById("invFecha").value = new Date().toISOString().slice(0,10);
-["gMonto","dInicial","dSaldo","dPago","feAhorrado","feAporte","feAporteMontoNuevo","mObjetivo","mAhorrado","newIngresoMonto","invMonto","c4Monto"].forEach(id=>{
+["gMonto","dInicial","dSaldo","dPago","feAhorrado","feAporte","feAporteMontoNuevo","mObjetivo","mAhorrado","newIngresoMonto","invMonto","c4Monto","credMonto"].forEach(id=>{
   const el = document.getElementById(id);
   if(el) maskMiles(el);
 });
