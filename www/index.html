@@ -607,6 +607,10 @@
         <div class="chart-head">
           <select id="chartRubroInicio" aria-label="Rubro del comparativo"></select>
         </div>
+        <div style="display:flex; gap:8px; margin:10px 0 4px;">
+          <button type="button" id="vistaBarras_inicio" class="btn-modo-abono activo" onclick="ccSetVistaChart('inicio','barras')" style="flex:1;">Barras</button>
+          <button type="button" id="vistaTorta_inicio" class="btn-modo-abono" onclick="ccSetVistaChart('inicio','torta')" style="flex:1;">Torta</button>
+        </div>
         <div id="chartInicio"></div>
       </div>
 
@@ -2302,7 +2306,7 @@ function sincronizarFiltrosGastos(){
    GRÁFICA DE LÍNEAS (comparativo mensual)
    ===================================================================== */
 const chartState = {
-  inicio: { rubro:"Todos", pick:null },
+  inicio: { rubro:"Todos", pick:null, vista:"barras" },
   gastos: { rubro:"Todos", pick:null, vista:"barras" }
 };
 
