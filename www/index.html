@@ -1641,7 +1641,7 @@ const RUBROS_DEFAULT = [
 ];
 
 /* ---- Icono por rubro: el usuario puede elegir el suyo; si no, se sugiere por palabra clave ---- */
-const CC_ICONOS_RUBRO = ["🏠","🏢","🌳","📶","📱","🎒","🧾","🚌","📺","🛒","⛽","💊","🌿","💡","🚰","🔥","🏥","🙏","🛍️","☕","💇","🍔","🥐","🥩","🥦","✨","💰","🎉","🐾","🚗","👶","🎁","💳","🎮","📌"];
+const CC_ICONOS_RUBRO = ["🏠","🏢","🌳","📶","📱","🎒","🧾","🚌","📺","🛒","🏪","⛽","💊","🌿","💡","🚰","🔥","🏥","🙏","🛍️","☕","💇","🍔","🥐","🥩","🍎","🥦","✨","💰","🎉","🐾","🚗","👨","👩","👦","👧","👶","🎁","💳","🎮","📌"];
 function ccSugerirIcono(nombre){
   const n = (nombre||"").toLowerCase();
   const reglas = [
@@ -2972,7 +2972,7 @@ function renderPresupuesto(){
           <label>Icono</label>
           <input type="hidden" id="editIcono_${idx}" value="${esc(ccIconoRubro(r))}">
           <div id="iconoPreview_${idx}" style="font-size:30px; text-align:center; margin-bottom:8px;">${ccIconoRubro(r)}</div>
-          <div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:14px;">
+          <div style="display:grid; grid-template-columns:repeat(7, minmax(0,1fr)); gap:6px; justify-items:center; margin-bottom:14px;">
             ${CC_ICONOS_RUBRO.map(ic=>`<button type="button" onclick="ccElegirIconoTemp(${idx},'${ic}')" style="font-size:17px; width:34px; height:34px; border-radius:9px; border:1px solid var(--line); background:var(--surface-2); cursor:pointer;">${ic}</button>`).join("")}
           </div>
           <div class="field-row">
