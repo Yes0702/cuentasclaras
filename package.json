@@ -1,18 +1,16 @@
 {
   "name": "cuentas-claras",
-  "version": "3.0.0",
-  "private": true,
-  "description": "Cuentas Claras - Presupuesto Familiar",
+  "version": "9.8.0",
+  "description": "Cuentas Claras - Presupuesto familiar",
   "scripts": {
-    "android": "cap add android && cap sync android",
-    "sync": "cap sync android",
-    "apk": "cd android && ./gradlew assembleDebug"
+    "build": "echo done"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/app": "^7.0.0",
     "@capacitor/browser": "^7.0.0",
     "@capacitor/core": "^7.0.0",
+    "@capacitor-community/file-opener": "^7.0.0",
     "@capacitor/filesystem": "^7.0.0",
     "@capacitor/local-notifications": "^7.0.0",
     "@capacitor/share": "^7.0.0",
