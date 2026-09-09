@@ -1,4 +1,4 @@
-name: Compilar APK
+name: Compilar APK y AAB
 
 # Se ejecuta al subir cambios y tambien a mano desde la pestaña Actions
 on:
@@ -69,12 +69,31 @@ jobs:
             -Pandroid.injected.signing.key.alias=cuentasclaras \
             -Pandroid.injected.signing.key.password=CuentasClaras2026
 
+      - name: Compilar el AAB firmado (para Play Store)
+        run: |
+          cd android
+          ./gradlew bundleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/cuentasclaras.keystore" \
+            -Pandroid.injected.signing.store.password=CuentasClaras2026 \
+            -Pandroid.injected.signing.key.alias=cuentasclaras \
+            -Pandroid.injected.signing.key.password=CuentasClaras2026
+
       - name: Renombrar el APK
         run: cp android/app/build/outputs/apk/release/app-release.apk CuentasClaras.apk
+
+      - name: Renombrar el AAB
+        run: cp android/app/build/outputs/bundle/release/app-release.aab CuentasClaras.aab
 
       - name: Publicar el APK descargable
         uses: actions/upload-artifact@v4
         with:
           name: CuentasClaras-APK
           path: CuentasClaras.apk
+          retention-days: 90
+
+      - name: Publicar el AAB para Play Store
+        uses: actions/upload-artifact@v4
+        with:
+          name: CuentasClaras-AAB
+          path: CuentasClaras.aab
           retention-days: 90
