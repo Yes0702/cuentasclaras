@@ -691,6 +691,8 @@
           <input type="text" id="newIngresoNombre" placeholder="Ej: Carrera del lunes, Comisión, Domicilio">
           <label>Monto</label>
           <input type="text" inputmode="numeric" id="newIngresoMonto" class="mono-input" placeholder="0">
+          <label>Fecha en que lo recibiste</label>
+          <input type="date" id="newIngresoFecha">
           <div class="hint" style="margin-top:6px;">Se guardará en <b id="addIngMesLabel"></b>.</div>
           <div class="edit-actions">
             <button class="btn-primary" style="margin:0;" onclick="addIngreso()">Guardar ingreso</button>
@@ -1643,6 +1645,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var n,r,i,a,
    ===================================================================== */
 const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const MESES_LARGO = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function ccFormatoFechaCorta(fechaISO){
+  if(!fechaISO) return "";
+  const partes = fechaISO.split("-");
+  if(partes.length<3) return fechaISO;
+  const dia = parseInt(partes[2],10);
+  const mesIdx = parseInt(partes[1],10)-1;
+  return dia + " " + (MESES[mesIdx] ? MESES[mesIdx].toLowerCase() : "");
+}
 const TIPOS = ["Fijo","Variable necesario","Flexible/Deseo","Ahorro"];
 const STORAGE_KEY   = "cuentasClaras_v2";
 const STORAGE_KEY_V1 = "cuentasClaras_v1";
@@ -2815,14 +2825,17 @@ function toggleVerPrincipal(){ mostrarPrincipalBloque = !mostrarPrincipalBloque;
 function toggleAddIngreso(){
   const panel = document.getElementById("addIngresoPanel");
   panel.style.display = panel.style.display==="none" ? "block" : "none";
+  const f = document.getElementById("newIngresoFecha");
+  if(f && !f.value) f.value = new Date().toISOString().slice(0,10);
 }
 function addIngreso(){
   const nombre = document.getElementById("newIngresoNombre").value.trim();
   const monto = numFromMasked("newIngresoMonto");
+  const fecha = document.getElementById("newIngresoFecha").value || new Date().toISOString().slice(0,10);
   if(!nombre){ toast("Ponle un nombre (ej. Carrera del lunes, Comisión)."); return; }
   if(monto<=0){ toast("El monto debe ser mayor a cero."); return; }
   state.ingresosOcasionales.push({
-    id: uid(), nombre, monto,
+    id: uid(), nombre, monto, fecha,
     mes: state.mesActivo, anio: state.anioActivo
   });
   recalcularIngreso();
@@ -2840,8 +2853,10 @@ function saveIngresoEdit(id){
   if(!it) return;
   const nombre = document.getElementById("edIngN_"+id).value.trim();
   const monto = numFromMasked("edIngM_"+id);
+  const fechaEl = document.getElementById("edIngF_"+id);
   if(!nombre){ toast("Ponle un nombre a este ingreso."); return; }
   it.nombre = nombre; it.monto = monto;
+  if(fechaEl && fechaEl.value) it.fecha = fechaEl.value;
   recalcularIngreso();
   editingIngresoId = null;
   saveState(); renderAll();
@@ -2921,6 +2936,8 @@ function renderIngresos(){
             <input type="text" id="edIngN_${i.id}" value="${esc(i.nombre)}">
             <label>Monto</label>
             <input type="text" inputmode="numeric" id="edIngM_${i.id}" class="mono-input" value="${i.monto.toLocaleString('es-CO')}">
+            <label>Fecha en que lo recibiste</label>
+            <input type="date" id="edIngF_${i.id}" value="${esc(i.fecha||'')}">
             <div class="edit-actions">
               <button class="btn-primary" style="margin:0;" onclick="saveIngresoEdit('${i.id}')">Guardar</button>
               <button class="btn-danger" style="margin:0; flex:0 0 auto;" onclick="deleteIngreso('${i.id}')">Eliminar</button>
@@ -2929,7 +2946,7 @@ function renderIngresos(){
           </div>`;
         }
         return `<div class="receipt" style="margin-top:8px;" onclick="openIngresoEdit('${i.id}')">
-          <div class="r-main"><div class="r-rubro">${esc(i.nombre)}</div></div>
+          <div class="r-main"><div class="r-rubro">${esc(i.nombre)}</div><div class="hint" style="margin-top:1px;">${i.fecha ? ccFormatoFechaCorta(i.fecha) : ""}</div></div>
           <div class="r-amount" style="color:var(--brand-dark);">${money(i.monto)}</div>
           <button class="r-edit" onclick="event.stopPropagation(); openIngresoEdit('${i.id}')" aria-label="Editar">✎</button>
         </div>`;
@@ -3318,9 +3335,9 @@ function ccAbrirPickerRubro(){
   if(!ccRubrosParaPicker.length){ toast("Primero crea un rubro variable en Presupuesto."); return; }
   const overlay = document.createElement("div");
   overlay.id = "modalPickerRubro";
-  overlay.style.cssText = "position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); display:flex; align-items:flex-end; justify-content:center;";
+  overlay.style.cssText = "position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px;";
   overlay.innerHTML = `
-    <div style="background:var(--surface); border-radius:20px 20px 0 0; padding:18px 16px 22px; width:100%; max-width:460px; max-height:78vh; display:flex; flex-direction:column;">
+    <div id="pickerRubroPanel" style="background:var(--surface); border-radius:20px; padding:18px 16px 22px; width:100%; max-width:460px; max-height:80vh; display:flex; flex-direction:column;">
       <div style="font-weight:800; font-size:15px; margin-bottom:12px;">Elegir rubro</div>
       <div style="display:flex; align-items:center; gap:8px; background:var(--surface-2); border:1px solid var(--line); border-radius:11px; padding:9px 12px; margin-bottom:10px;">
         <span style="font-size:15px; color:var(--ink-mute);">🔎</span>
@@ -3331,7 +3348,14 @@ function ccAbrirPickerRubro(){
     </div>`;
   document.body.appendChild(overlay);
   ccRenderPickerRubro();
+  ccAjustarPickerAlTeclado();
+  if(window.visualViewport) window.visualViewport.addEventListener("resize", ccAjustarPickerAlTeclado);
   setTimeout(()=>{ const b=document.getElementById("pickerRubroBuscar"); if(b) b.focus(); }, 50);
+}
+function ccAjustarPickerAlTeclado(){
+  const panel = document.getElementById("pickerRubroPanel");
+  const vv = window.visualViewport;
+  if(panel && vv){ panel.style.maxHeight = Math.round(vv.height*0.85) + "px"; }
 }
 function ccRenderPickerRubro(){
   const cont = document.getElementById("pickerRubroLista");
@@ -3352,6 +3376,7 @@ function ccElegirRubroGasto(nombre){
 function ccCerrarPickerRubro(){
   const m = document.getElementById("modalPickerRubro");
   if(m) m.remove();
+  if(window.visualViewport) window.visualViewport.removeEventListener("resize", ccAjustarPickerAlTeclado);
 }
 function fillRubroSelects(){
   // Selector de gasto MANUAL: excluye los rubros Fijos (esos van solo por interruptor), ordenado por uso
@@ -7133,7 +7158,25 @@ function ccIniciarNativo(){
     }
   }catch(e){}
 
-  // Botón atrás de Android: si no estás en Inicio -> ir a Inicio.
+  // Cierra cualquier ventana emergente que esté abierta en este momento.
+  // Devuelve true si cerró algo (para que el botón atrás no haga nada más ese toque).
+  function ccCerrarModalAbiertoSiHay(){
+    const idsYFn = [
+      ["modalPickerRubro", ccCerrarPickerRubro],
+      ["modalAbonoCapital", ccCerrarModalAbono],
+      ["modalRespaldoUpdate", ccCerrarModalRespUpd],
+      ["modalDescargaApk", ccCerrarModalDescargaApk]
+    ];
+    for(const [id, fn] of idsYFn){
+      if(document.getElementById(id)){ fn(); return true; }
+    }
+    const ayuda = document.getElementById("ccAyuda");
+    if(ayuda && ayuda.style.display !== "none"){ ccCerrarModalAyuda(); return true; }
+    return false;
+  }
+
+  // Botón atrás de Android: primero cierra cualquier ventana emergente.
+  // Si no hay ninguna abierta: si no estás en Inicio -> ir a Inicio.
   // Si ya estás en Inicio -> salir de la app (no queda en segundo plano).
   try{
     const AppP = Capacitor.Plugins.App;
@@ -7142,6 +7185,7 @@ function ccIniciarNativo(){
         // Si la pantalla de bloqueo está visible, atrás cierra la app
         const lock = document.getElementById("ccLock");
         if(lock && lock.style.display !== "none"){ AppP.exitApp(); return; }
+        if(ccCerrarModalAbiertoSiHay()) return;
         if(ccVistaActual !== "inicio"){
           showView("inicio");
         }else{
