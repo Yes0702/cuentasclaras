@@ -6208,7 +6208,7 @@ async function ccDescargarEInstalarAPK(url){
 
   ccMostrarModalDescargaApk();
   try{
-    const resp = await fetch(url);
+    const resp = await fetch(url, { redirect: "follow", cache: "no-store" });
     if(!resp.ok || !resp.body) throw new Error("La descarga falló (" + resp.status + ")");
     const total = Number(resp.headers.get("Content-Length")) || 0;
     const reader = resp.body.getReader();
@@ -6223,6 +6223,14 @@ async function ccDescargarEInstalarAPK(url){
     }
     ccActualizarProgresoApk(93, "Preparando instalación…");
     const buffer = await new Blob(partes).arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    // Un APK es en el fondo un archivo ZIP: SIEMPRE empieza con las letras "PK" (0x50 0x4B).
+    // Si no las tiene, es que la descarga trajo otra cosa (ej. una página de redirección
+    // de GitHub) en vez del APK real. Mejor fallar aquí y usar el navegador, que sí
+    // sigue bien esas redirecciones, en vez de intentar instalar un archivo dañado.
+    if(bytes.length < 1000 || bytes[0] !== 0x50 || bytes[1] !== 0x4B){
+      throw new Error("El archivo descargado no parece un APK válido (posible redirección no seguida).");
+    }
     const base64 = ccArrayBufferABase64(buffer);
     const res = await FS.writeFile({ path: "CuentasClaras-update.apk", data: base64, directory: "CACHE" });
     ccActualizarProgresoApk(100, "Abriendo instalador…");
