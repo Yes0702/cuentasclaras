@@ -912,6 +912,16 @@
         <label>% de interés anual que te cobran (opcional)</label>
         <input type="text" inputmode="decimal" id="dTasa" class="mono-input" placeholder="Ej: 24">
 
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px; text-transform:none; letter-spacing:0; font-weight:600; color:var(--ink);">
+          <input type="checkbox" id="dTieneManejo" style="width:auto;" onchange="document.getElementById('dManejoBody').style.display=this.checked?'block':'none'; if(!this.checked) document.getElementById('dManejoValor').value='';">
+          💳 ¿Tiene cuota de manejo?
+        </label>
+        <div id="dManejoBody" style="display:none; padding-top:2px;">
+          <label>Valor de la cuota de manejo (mensual)</label>
+          <input type="text" inputmode="numeric" id="dManejoValor" class="mono-input" placeholder="0">
+          <div class="hint" style="margin-top:4px;">Se suma automáticamente a tu pago del mes, todos los meses.</div>
+        </div>
+
         <div class="cc-seccion">Fechas clave</div>
         <label>📅 Fecha de corte (opcional, solo si es tarjeta de crédito)</label>
         <select id="dCorte" class="mono-input">
@@ -955,6 +965,8 @@
         </div>
         <label>📅 Fecha de la compra</label>
         <input type="date" id="existFecha">
+        <label>% de interés de esta compra (opcional — vacío = diferido sin interés)</label>
+        <input type="text" inputmode="decimal" id="existTasa" class="mono-input" placeholder="Ej: 24" oninput="onExistPreview()">
         <div class="hint" id="existPreview" style="margin-top:10px; padding:9px 12px; background:var(--surface-2); border-radius:10px;"></div>
         <button class="btn-primary" onclick="confirmarAgregarMovimiento()">Confirmar adición</button>
       </div>
@@ -4532,10 +4544,11 @@ function recalcularDeuda(d){
     if(m.primerMes && m.primerMes > mesActual) return s; // aún no le toca facturar
     return s + (m.cuotaMensual||0);
   }, 0));
+  if(d.cuotaManejoActiva) d.pago += Math.round(d.cuotaManejoValor||0);
   d.inicial = Math.round(d.movimientos.reduce((s,m)=> s + Math.max(0, m.valor||0), 0));
-  // Sello automático de "pagada": se guarda la fecha la primera vez que llega a $0,
-  // y se limpia solo si vuelve a tener saldo (por ejemplo, si agregas una compra nueva).
-  if(d.saldo<=0){
+  // Sello automático de "pagada": solo cuenta como pagada si además NO tiene
+  // cuota de manejo activa (esa te la siguen cobrando cada mes aunque el saldo esté en $0).
+  if(d.saldo<=0 && !d.cuotaManejoActiva){
     if(!d.fechaPagada) d.fechaPagada = fechaLocalHoy();
   } else {
     d.fechaPagada = null;
@@ -4543,11 +4556,19 @@ function recalcularDeuda(d){
 }
 
 /* Agrega un movimiento (compra) nuevo a una deuda EXISTENTE, sin crear una deuda duplicada. */
-function agregarMovimientoDeuda(deudaId, {descripcion, valor, cuotas, fecha}){
+/* Cuota fija de una compra a cuotas. Si no hay interés (o es 1 sola cuota), es
+   simplemente valor÷cuotas. Si hay interés, usa la fórmula real de amortización. */
+function ccCuotaAmortizada(valor, cuotas, tasaAnual){
+  if(!(cuotas>1) || !(tasaAnual>0)) return cuotas>0 ? Math.ceil(valor/(cuotas||1)) : valor;
+  const i = tasaAnual/100/12;
+  return Math.ceil(valor * i / (1 - Math.pow(1+i, -cuotas)));
+}
+
+function agregarMovimientoDeuda(deudaId, {descripcion, valor, cuotas, tasaAnual, fecha}){
   const d = state.deudas.find(x=>x.id===deudaId);
   if(!d) return;
   if(!Array.isArray(d.movimientos)) d.movimientos = [];
-  const cuotaMensual = cuotas>0 ? Math.ceil(valor/cuotas) : valor;
+  const cuotaMensual = ccCuotaAmortizada(valor, cuotas, tasaAnual);
   d.movimientos.push({
     id: uid(),
     descripcion: descripcion || "Compra",
@@ -4556,7 +4577,7 @@ function agregarMovimientoDeuda(deudaId, {descripcion, valor, cuotas, fecha}){
     cuotas: cuotas || 0,
     cuotaMensual,
     cuotasPagadas: 0,
-    tasaAnual: d.tasaAnual || 0,   // hereda la tasa de la tarjeta/deuda, no se vuelve a preguntar
+    tasaAnual: tasaAnual || 0,   // interés propio de ESTA compra (0 = diferido sin interés)
     fecha: fecha || fechaLocalHoy(),
     primerMes: ccCalcularPrimerMes(fecha, d.diaCorte),
     activo: true
@@ -4609,9 +4630,16 @@ function onExistPreview(){
   const el = document.getElementById("existPreview");
   const valor = numFromMasked("existValor");
   const cuotas = parseInt(document.getElementById("existCuotas").value)||0;
+  const tasaEl = document.getElementById("existTasa");
+  const tasaAnual = tasaEl ? (parseFloat(String(tasaEl.value).replace(",","."))||0) : 0;
   if(valor<=0){ el.textContent=""; return; }
-  const cuotaMensual = cuotas>0 ? Math.ceil(valor/cuotas) : valor;
-  el.innerHTML = `Nueva cuota: <b>${money(cuotaMensual)}</b>${cuotas>0?` / mes durante ${cuotas} cuotas`:" (una sola cuota)"}.`;
+  const cuotaMensual = ccCuotaAmortizada(valor, cuotas, tasaAnual);
+  let texto = `Nueva cuota: <b>${money(cuotaMensual)}</b>${cuotas>0?` / mes durante ${cuotas} cuotas`:" (una sola cuota)"}.`;
+  if(tasaAnual>0 && cuotas>1){
+    const totalPagado = cuotaMensual*cuotas;
+    texto += ` Total a pagar: <b>${money(totalPagado)}</b> (${money(totalPagado-valor)} de interés).`;
+  }
+  el.innerHTML = texto;
 }
 
 function confirmarAgregarMovimiento(){
@@ -4620,10 +4648,12 @@ function confirmarAgregarMovimiento(){
   const valor = numFromMasked("existValor");
   const cuotas = parseInt(document.getElementById("existCuotas").value)||0;
   const fecha = document.getElementById("existFecha").value;
+  const tasaEl = document.getElementById("existTasa");
+  const tasaAnual = tasaEl ? (parseFloat(String(tasaEl.value).replace(",","."))||0) : 0;
   if(!deudaId){ toast("Selecciona una deuda."); return; }
   if(valor<=0){ toast("Escribe el valor de la compra."); return; }
-  agregarMovimientoDeuda(deudaId, {descripcion, valor, cuotas, fecha});
-  ["existDescripcion","existValor","existCuotas","existFecha"].forEach(id=>document.getElementById(id).value="");
+  agregarMovimientoDeuda(deudaId, {descripcion, valor, cuotas, tasaAnual, fecha});
+  ["existDescripcion","existValor","existCuotas","existTasa","existFecha"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("existPreview").textContent = "";
   toast("Compra agregada a "+ (state.deudas.find(x=>x.id===deudaId)||{}).nombre);
 }
@@ -4639,8 +4669,10 @@ function addDeuda(){
   const tasaAnual = tasaEl ? (parseFloat(String(tasaEl.value).replace(",","."))||0) : 0;
   const diaPago = parseInt(document.getElementById("dDiaPago").value)||0;
   const diaCorte = parseInt(document.getElementById("dCorte").value)||0;
+  const cuotaManejoActiva = document.getElementById("dTieneManejo").checked;
+  const cuotaManejoValor = cuotaManejoActiva ? numFromMasked("dManejoValor") : 0;
   if(!nombre || inicial<=0 || pago<=0){ toast("Completa nombre, deuda inicial y pago mensual."); return; }
-  const nuevaDeuda = {id:uid(), nombre, inicial, saldo, pago, fecha, mesesObjetivo, tasaAnual, interesPagado:0, diaPago, diaCorte, interesAcumuladoNoPagado:0};
+  const nuevaDeuda = {id:uid(), nombre, inicial, saldo, pago, fecha, mesesObjetivo, tasaAnual, interesPagado:0, diaPago, diaCorte, interesAcumuladoNoPagado:0, cuotaManejoActiva, cuotaManejoValor};
   nuevaDeuda.movimientos = [{
     id: uid(),
     descripcion: nombre,
@@ -4655,7 +4687,9 @@ function addDeuda(){
     activo: saldo > 0
   }];
   state.deudas.push(nuevaDeuda);
-  ["dNombre","dInicial","dSaldo","dPago","dTasa","dCorte","dDiaPago","dFecha","dMeses"].forEach(id=>document.getElementById(id).value="");
+  ["dNombre","dInicial","dSaldo","dPago","dTasa","dCorte","dDiaPago","dFecha","dMeses","dManejoValor"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("dTieneManejo").checked = false;
+  document.getElementById("dManejoBody").style.display = "none";
   document.getElementById("deudaPagoHint").textContent = "";
   saveState();
   renderDeudas();
@@ -5287,6 +5321,9 @@ function saveDeudaEdit(id){
     });
   }
   d.interesAcumuladoNoPagado = 0; // la edición manual reemplaza cualquier residuo previo
+  const edManejo = document.getElementById("edTieneManejo_"+id);
+  d.cuotaManejoActiva = edManejo ? edManejo.checked : false;
+  d.cuotaManejoValor = d.cuotaManejoActiva ? numFromMasked("edManejoValor_"+id) : 0;
   recalcularDeuda(d);
   d.inicial = nuevoInicial; // respeta el valor inicial tal como lo escribió el usuario
 
@@ -5338,10 +5375,18 @@ function renderDeudas(){
           <div><label>Deuda inicial</label><input type="text" inputmode="numeric" id="edI_${d.id}" class="mono-input" value="${d.inicial.toLocaleString('es-CO')}"></div>
           <div><label>Saldo actual</label><input type="text" inputmode="numeric" id="edS_${d.id}" class="mono-input" value="${d.saldo.toLocaleString('es-CO')}"></div>
         </div>
-        <label>Pago mensual</label>
-        <input type="text" inputmode="numeric" id="edP_${d.id}" class="mono-input" value="${d.pago.toLocaleString('es-CO')}">
+        <label>Pago mensual (solo de las compras, sin cuota de manejo)</label>
+        <input type="text" inputmode="numeric" id="edP_${d.id}" class="mono-input" value="${(d.pago-(d.cuotaManejoActiva?d.cuotaManejoValor||0:0)).toLocaleString('es-CO')}">
         <label>% de interés anual (opcional)</label>
         <input type="text" inputmode="decimal" id="edT_${d.id}" class="mono-input" value="${d.tasaAnual||""}">
+        <label style="display:flex; align-items:center; gap:8px; margin-top:14px; text-transform:none; letter-spacing:0; font-weight:600; color:var(--ink);">
+          <input type="checkbox" id="edTieneManejo_${d.id}" style="width:auto;" ${d.cuotaManejoActiva?"checked":""} onchange="document.getElementById('edManejoBody_${d.id}').style.display=this.checked?'block':'none';">
+          💳 ¿Tiene cuota de manejo?
+        </label>
+        <div id="edManejoBody_${d.id}" style="display:${d.cuotaManejoActiva?"block":"none"}; padding-top:2px;">
+          <label>Valor de la cuota de manejo (mensual)</label>
+          <input type="text" inputmode="numeric" id="edManejoValor_${d.id}" class="mono-input" value="${d.cuotaManejoValor?d.cuotaManejoValor.toLocaleString('es-CO'):""}">
+        </div>
         <label>Fecha de corte (opcional, solo si es tarjeta de crédito)</label>
         <select id="edCorte_${d.id}" class="mono-input">
           <option value="">Sin fecha de corte</option>
@@ -5368,7 +5413,7 @@ function renderDeudas(){
     }
     const pctPagado = d.inicial>0 ? Math.min(100, (1-d.saldo/d.inicial)*100) : 0;
     const barClass = pctPagado>=66 ? "debt-high" : (pctPagado>=33 ? "debt-mid" : "debt-low");
-    if(d.saldo<=0){
+    if(d.saldo<=0 && !d.cuotaManejoActiva){
       return `<div class="card" id="deudaCard_${d.id}" onclick="openDeudaEdit('${d.id}')" style="background:var(--brand-soft); border-color:#BFE9DA;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
           <div style="min-width:0;">
@@ -5403,7 +5448,7 @@ function renderDeudas(){
       <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
         <div style="min-width:0;">
           <div style="font-weight:700; font-size:14.5px;">💳 ${esc(d.nombre)}</div>
-          <div class="hint" style="margin-top:2px;">Pago mensual ${money(d.pago)} · ${mesesTexto}${d.fecha ? ` · meta: ${d.fecha}` : ""}${d.diaCorte ? ` · Corte: día ${d.diaCorte}` : ""}</div>
+          <div class="hint" style="margin-top:2px;">Pago mensual ${money(d.pago)} · ${mesesTexto}${d.fecha ? ` · meta: ${d.fecha}` : ""}${d.diaCorte ? ` · Corte: día ${d.diaCorte}` : ""}${d.cuotaManejoActiva ? ` · Manejo: ${money(d.cuotaManejoValor)}` : ""}</div>
         </div>
         ${esPendiente("deuda:"+d.id)
           ? `<button class="r-del confirm" onclick="event.stopPropagation(); deleteDeuda('${d.id}')">✓ Eliminar</button>`
@@ -7206,7 +7251,7 @@ function renderAll(){
 document.getElementById("gFecha").value = fechaLocalHoy();
 document.getElementById("feAporteFechaNueva").value = fechaLocalHoy();
 document.getElementById("invFecha").value = fechaLocalHoy();
-["gMonto","dInicial","dSaldo","dPago","feAhorrado","feAporte","feAporteMontoNuevo","mObjetivo","mAhorrado","newIngresoMonto","invMonto","c4Monto","credMonto","existValor"].forEach(id=>{
+["gMonto","dInicial","dSaldo","dPago","feAhorrado","feAporte","feAporteMontoNuevo","mObjetivo","mAhorrado","newIngresoMonto","invMonto","c4Monto","credMonto","existValor","dManejoValor"].forEach(id=>{
   const el = document.getElementById(id);
   if(el) maskMiles(el);
 });
