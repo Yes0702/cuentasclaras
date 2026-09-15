@@ -61,6 +61,13 @@ jobs:
           echo "Keystore restaurado en: $(pwd)/android/app/cuentasclaras.keystore"
           ls -la android/app/cuentasclaras.keystore
 
+      - name: Mostrar huella digital del certificado (para comparar entre versiones)
+        run: |
+          keytool -list -v \
+            -keystore android/app/cuentasclaras.keystore \
+            -storepass CuentasClaras2026 \
+            -alias cuentasclaras | grep -A1 "SHA256:"
+
       - name: Compilar el APK firmado
         run: |
           cd android
