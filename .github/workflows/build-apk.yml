@@ -36,6 +36,9 @@ jobs:
       - name: Crear proyecto Android
         run: npx cap add android
 
+      - name: Bloquear el tamaño de letra del sistema
+        run: node scripts/textzoom-android.js
+
       - name: Agregar permisos de alarmas
         run: node scripts/permisos-android.js
 
