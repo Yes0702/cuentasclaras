@@ -1,10 +1,31 @@
 name: Compilar APK y AAB
 
-# Se ejecuta al subir cambios y tambien a mano desde la pestaña Actions
+# Se ejecuta al subir cambios (solo compila, no publica nada) y también a
+# mano desde la pestaña Actions. Cuando se lanza a mano CON un número de
+# "version", además publica una Release en GitHub con el APK, el AAB y el
+# version.json que usan el botón de descarga y el aviso de actualización
+# dentro de la app. Sin ese dato, un push normal a main NUNCA publica una
+# Release — solo deja los archivos como Artifact para pruebas.
 on:
   push:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a publicar en Releases (ej: 9.12). Vacío = solo compilar, sin publicar.'
+        required: false
+        default: ''
+      titulo:
+        description: 'Título de la Release (ej: Cuentas Claras 9.12). Vacío = "Cuentas Claras <version>".'
+        required: false
+        default: ''
+      novedades:
+        description: 'Notas de esta versión (se muestran en el aviso de actualización dentro de la app).'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
 
 jobs:
   apk:
@@ -51,10 +72,15 @@ jobs:
       - name: Numerar versión automáticamente
         run: |
           GRADLE=android/app/build.gradle
+          # Si se lanzó a mano con un número de versión, se usa ese (ej: 9.12).
+          # Si no, se arma uno de prueba con el número de ejecución.
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then VERSION="9.10.${GITHUB_RUN_NUMBER}"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           # versionCode = número de compilación (siempre creciente)
           sed -i "s/versionCode [0-9]*/versionCode ${GITHUB_RUN_NUMBER}/" $GRADLE
-          # versionName = 9.10.<build> para que se vea en Android
-          sed -i "s/versionName \"[^\"]*\"/versionName \"9.10.${GITHUB_RUN_NUMBER}\"/" $GRADLE
+          # versionName = lo que se ve en Android
+          sed -i "s/versionName \"[^\"]*\"/versionName \"${VERSION}\"/" $GRADLE
           echo "--- versión aplicada ---"
           grep -E "versionCode|versionName" $GRADLE
 
@@ -109,3 +135,30 @@ jobs:
           name: CuentasClaras-AAB
           path: CuentasClaras.aab
           retention-days: 90
+
+      - name: Generar version.json
+        if: ${{ github.event.inputs.version != '' }}
+        run: |
+          cat > version.json <<EOF
+          {
+            "version": "${{ github.event.inputs.version }}",
+            "url": "https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/CuentasClaras.apk",
+            "novedades": ${{ toJSON(github.event.inputs.novedades) }}
+          }
+          EOF
+          cat version.json
+
+      - name: Publicar Release en GitHub
+        if: ${{ github.event.inputs.version != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITULO="${{ github.event.inputs.titulo }}"
+          if [ -z "$TITULO" ]; then TITULO="Cuentas Claras ${{ github.event.inputs.version }}"; fi
+          NOTAS="${{ github.event.inputs.novedades }}"
+          if [ -z "$NOTAS" ]; then NOTAS="Nueva versión de Cuentas Claras."; fi
+          gh release create "v${{ github.event.inputs.version }}" \
+            CuentasClaras.apk CuentasClaras.aab version.json \
+            --title "$TITULO" \
+            --notes "$NOTAS" \
+            --repo "${{ github.repository }}"
