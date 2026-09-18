@@ -2460,7 +2460,7 @@ function renderTopbar(){
   const extra = document.getElementById("hbExtra");
   const logo = document.getElementById("hbLogo");
   if(topEj) topEj.style.display = "none";
-  if(extra){ extra.style.display = "none"; extra.innerHTML = ""; }
+  if(extra){ extra.style.display = "none"; extra.innerHTML = ""; extra.style.fontSize = ""; extra.style.fontWeight = ""; extra.style.color = ""; }
   if(valEl) valEl.style.fontSize = "";
   if(logo) logo.style.display = "none";
   if(valEl) valEl.style.display = "";
@@ -2471,7 +2471,16 @@ function renderTopbar(){
     valEl.textContent = money(totalDeuda());
   } else if(ccVistaActual === "gastos"){
     lblEl.textContent = "Has pagado este mes";
-    valEl.textContent = money(totalRealMes(state.mesActivo, state.anioActivo));
+    const gastadoMes = totalRealMes(state.mesActivo, state.anioActivo);
+    valEl.textContent = money(gastadoMes);
+    if(extra){
+      const disponible = state.ingreso - gastadoMes;
+      extra.style.display = "block";
+      extra.style.fontSize = "13px";
+      extra.style.fontWeight = "700";
+      extra.style.color = disponible < 0 ? "#FFD3CE" : "rgba(255,255,255,.95)";
+      extra.textContent = (disponible < 0 ? "Te pasaste por " : "Tienes disponible ") + money(Math.abs(disponible));
+    }
   } else if(ccVistaActual === "ahorros"){
     lblEl.textContent = "Sigue invirtiendo";
     const presuAhorro = ahorroDisponibleMensual();
