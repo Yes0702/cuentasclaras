@@ -211,6 +211,36 @@
   .paso-mini p{font-size:12.5px;color:var(--tinta-suave);}
   .nota-mini{font-size:12px;color:#fff;background:var(--verde);border-radius:10px;padding:10px 12px;margin:16px 0;}
   .modal .btn-descarga{width:100%;justify-content:center;box-shadow:none;padding:14px;font-size:16px;}
+
+  /* ===== BOTÓN NUBE (destacado, va primero) ===== */
+  .btn-nube{
+    background:linear-gradient(135deg,#FFD166,#F2A93B);
+    color:var(--verde-osc); position:relative;
+    box-shadow:0 14px 34px rgba(0,0,0,.28), 0 0 0 2px rgba(255,255,255,.55) inset;
+  }
+  .btn-nube .badge{
+    position:absolute; top:-11px; right:-8px;
+    background:#E2584D; color:#fff; font-size:10.5px; font-weight:800;
+    padding:3px 9px; border-radius:100px; letter-spacing:.3px;
+    box-shadow:0 3px 8px rgba(0,0,0,.25);
+  }
+
+  /* ===== MODAL NUBE: selector de plan ===== */
+  .planes-nube{display:flex;flex-direction:column;gap:10px;margin:18px 0 4px;}
+  .plan-nube{
+    display:flex;align-items:center;gap:12px;width:100%;
+    background:var(--crema);border:1.5px solid var(--linea);border-radius:14px;
+    padding:12px 16px;cursor:pointer;font-family:inherit;text-align:left;
+    transition:border-color .15s, background .15s;
+  }
+  .plan-nube:hover{border-color:var(--verde-claro);}
+  .plan-nube.activo{border-color:var(--verde);background:#fff;box-shadow:0 0 0 2px rgba(15,143,107,.15);}
+  .plan-nube-n{
+    width:30px;height:30px;border-radius:50%;background:var(--verde);color:#fff;
+    font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+  }
+  .plan-nube-txt{flex:1;font-weight:700;font-size:14.5px;color:var(--tinta);}
+  .plan-nube-precio{font-weight:800;font-size:15px;color:var(--verde-osc);white-space:nowrap;}
 </style>
 </head>
 <body>
@@ -232,6 +262,10 @@
             <span class="chip">100% privada</span>
           </div>
           <div class="botones">
+            <button class="btn-descarga btn-nube reveal" id="btnNube" type="button">
+              <span class="badge">NUEVO</span>
+              <span>☁️</span> Datos en la nube — ábrela desde cualquier equipo
+            </button>
             <a class="btn-descarga reveal" href="https://github.com/Yes0702/cuentasclaras/releases/latest/download/CuentasClaras.apk">
               <span>⬇</span> Descargar para Android
             </a>
@@ -240,7 +274,7 @@
               Haz tu presupuesto en iPhone
             </button>
           </div>
-          <div class="nota-btn reveal">Android: descarga directa · iPhone: se usa desde Safari</div>
+          <div class="nota-btn reveal">Nube: sincroniza tu hogar en varios equipos · Android: descarga directa · iPhone: se usa desde Safari</div>
         </div>
         <div class="phones reveal">
           <div class="phone phone-back">
@@ -326,6 +360,10 @@
     <div class="wrap">
       <h2 class="reveal">Empieza hoy a tener tus cuentas claras</h2>
       <div class="botones" style="align-items:center;">
+        <button class="btn-descarga btn-nube reveal" id="btnNube2" type="button">
+          <span class="badge">NUEVO</span>
+          <span>☁️</span> Datos en la nube — ábrela desde cualquier equipo
+        </button>
         <a class="btn-descarga reveal" href="https://github.com/Yes0702/cuentasclaras/releases/latest/download/CuentasClaras.apk"><span>⬇</span> Descargar gratis para Android</a>
         <button class="btn-descarga reveal" id="btnIphone2" type="button"><svg class="icono-btn" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg> Haz tu presupuesto en iPhone</button>
       </div>
@@ -351,6 +389,50 @@
       <div class="paso-mini"><div class="num">4</div><div><h4>¡Listo!</h4><p>Aparece el ícono en tu pantalla. Ábrela desde ahí y úsala como una app normal.</p></div></div>
       <p class="nota-mini">📌 En iPhone las notificaciones de recordatorio son limitadas (por reglas de Apple). El resto de la app funciona igual.</p>
       <a class="btn-descarga" href="https://yes0702.github.io/cuentasclaras-app/">Abrir Cuentas Claras en Safari</a>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalNube">
+    <div class="modal">
+      <button class="cerrar" id="cerrarNube" aria-label="Cerrar">×</button>
+      <div class="icono-top">☁️</div>
+      <h2>Datos en la nube</h2>
+      <p class="desc">Sincroniza tu presupuesto entre tu celular, tu compu y el de tu familia — abre la misma cuenta desde cualquier equipo. Elige cuántas personas van a entrar:</p>
+
+      <div class="planes-nube" id="planesNube">
+        <button type="button" class="plan-nube" data-personas="1" data-precio="20.000">
+          <span class="plan-nube-n">1</span>
+          <span class="plan-nube-txt">Solo yo</span>
+          <span class="plan-nube-precio">$20.000</span>
+        </button>
+        <button type="button" class="plan-nube" data-personas="2" data-precio="25.000">
+          <span class="plan-nube-n">2</span>
+          <span class="plan-nube-txt">2 personas</span>
+          <span class="plan-nube-precio">$25.000</span>
+        </button>
+        <button type="button" class="plan-nube" data-personas="3" data-precio="30.000">
+          <span class="plan-nube-n">3</span>
+          <span class="plan-nube-txt">3 personas</span>
+          <span class="plan-nube-precio">$30.000</span>
+        </button>
+      </div>
+
+      <div id="pagoNube" style="display:none; margin-top:18px;">
+        <p class="nota-mini" id="pagoNubeResumen"></p>
+        <div style="padding:6px 0 2px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <img src="icons/breb-logo.png" alt="Bre-B" style="height:26px; width:auto; display:block;">
+            <span style="font-weight:500; color:var(--tinta-suave); font-size:11.5px;">· gratis, desde cualquier banco</span>
+          </div>
+          <div style="background:var(--crema); border-radius:12px; padding:14px 16px; text-align:center; margin-bottom:10px;">
+            <div style="font-size:20px; font-weight:800; color:var(--tinta); letter-spacing:.5px;">@yesids259</div>
+          </div>
+        </div>
+        <p class="desc" style="margin:10px 0;">¿Pagas desde fuera de Colombia? Usa PayPal:</p>
+        <a class="btn-descarga" style="width:100%; justify-content:center; box-shadow:none; padding:12px; font-size:15px; margin-bottom:14px;" href="https://www.paypal.me/Yes0702" target="_blank" rel="noopener">Pagar por PayPal</a>
+        <p class="nota-mini">📲 Ya que pagaste, mándanos el comprobante por WhatsApp y activamos tu código el mismo día.</p>
+        <a class="btn-descarga" style="width:100%; justify-content:center; padding:14px; font-size:16px; margin-top:10px;" id="btnWhatsappNube" href="#" target="_blank" rel="noopener">Enviar comprobante por WhatsApp</a>
+      </div>
     </div>
   </div>
 
@@ -403,6 +485,38 @@
     document.getElementById("cerrarIphone").addEventListener("click", cerrar);
     modal.addEventListener("click", (e)=>{ if(e.target === modal) cerrar(); });
     document.addEventListener("keydown", (e)=>{ if(e.key === "Escape") cerrar(); });
+  })();
+
+  // Modal Nube (círculo familiar / datos en la nube)
+  (function(){
+    const modal = document.getElementById("modalNube");
+    if(!modal) return;
+    const pago = document.getElementById("pagoNube");
+    const abrir = ()=>{ modal.classList.add("open"); document.body.style.overflow="hidden"; };
+    const cerrar = ()=>{
+      modal.classList.remove("open"); document.body.style.overflow="";
+      pago.style.display = "none";
+      document.querySelectorAll(".plan-nube").forEach(b=>b.classList.remove("activo"));
+    };
+    document.getElementById("btnNube").addEventListener("click", abrir);
+    const btnNube2 = document.getElementById("btnNube2");
+    if(btnNube2) btnNube2.addEventListener("click", abrir);
+    document.getElementById("cerrarNube").addEventListener("click", cerrar);
+    modal.addEventListener("click", (e)=>{ if(e.target === modal) cerrar(); });
+
+    document.querySelectorAll(".plan-nube").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        document.querySelectorAll(".plan-nube").forEach(b=>b.classList.remove("activo"));
+        btn.classList.add("activo");
+        const personas = btn.dataset.personas;
+        const precio = btn.dataset.precio;
+        const etiqueta = personas === "1" ? "1 persona" : personas + " personas";
+        document.getElementById("pagoNubeResumen").textContent = "Plan de " + etiqueta + " — $" + precio + " COP.";
+        const msg = encodeURIComponent("Hola, quiero activar mi hogar en la nube (plan de " + etiqueta + ", $" + precio + "). Aquí va mi comprobante de pago:");
+        document.getElementById("btnWhatsappNube").href = "https://wa.me/573127352221?text=" + msg;
+        pago.style.display = "block";
+      });
+    });
   })();
 </script>
 </body>
