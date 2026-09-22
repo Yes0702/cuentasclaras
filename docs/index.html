@@ -517,6 +517,9 @@
         pago.style.display = "block";
       });
     });
+
+    // Si llegan con #nube en el link (ej. desde el botón dentro de la app), abre el modal directo.
+    if(location.hash === "#nube") abrir();
   })();
 </script>
 </body>
