@@ -153,12 +153,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TAG="v${{ github.event.inputs.version }}"
+          REPO="${{ github.repository }}"
           TITULO="${{ github.event.inputs.titulo }}"
           if [ -z "$TITULO" ]; then TITULO="Cuentas Claras ${{ github.event.inputs.version }}"; fi
           NOTAS="${{ github.event.inputs.novedades }}"
           if [ -z "$NOTAS" ]; then NOTAS="Nueva versión de Cuentas Claras."; fi
-          gh release create "v${{ github.event.inputs.version }}" \
+          # Si ese tag ya tenía una Release publicada (ej: se corrigió algo antes de que
+          # alguien la descargara), se reemplaza por completo en vez de fallar por duplicado
+          # — borra la Release vieja y su tag, y publica de nuevo apuntando al commit actual.
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "La Release $TAG ya existía: se reemplaza."
+            gh release delete "$TAG" --repo "$REPO" --yes --cleanup-tag
+          fi
+          gh release create "$TAG" \
             CuentasClaras.apk CuentasClaras.aab version.json \
             --title "$TITULO" \
             --notes "$NOTAS" \
-            --repo "${{ github.repository }}"
+            --repo "$REPO"
