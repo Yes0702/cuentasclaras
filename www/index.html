@@ -4421,10 +4421,10 @@ function renderGastosFijos(){
           onclick="toggleGastoFijo('${esc(r.nombre)}')" aria-label="Marcar pagado"></button>
       </div>`;
     }).join("") +
-    `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--line);">
-       <span class="s-sub">${pagados} de ${fijos.length} pagados en ${state.mesActivo}</span>
+    `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid #E9C9A3;">
+       <span class="s-sub" style="color:#7A4A18;">${pagados} de ${fijos.length} pagados en ${state.mesActivo}</span>
      </div>
-     <div class="hint" style="margin-top:6px;">Si pagaste un valor distinto, edítalo en la lista de gastos de abajo.</div>`;
+     <div class="hint" style="margin-top:6px; color:#9A6B33;">Si pagaste un valor distinto, edítalo en la lista de gastos de abajo.</div>`;
 }
 
 async function toggleGastoFijo(nombreRubro){
