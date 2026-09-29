@@ -279,6 +279,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // La descarga del APK de actualización TAMPOCO se cachea: su URL es fija
+  // ("latest/download/CuentasClaras.apk", siempre igual aunque el contenido
+  // cambie con cada versión). Si se cacheara, la próxima vez que se pidiera
+  // actualizar (a una versión más nueva) este Service Worker devolvería el
+  // instalador VIEJO que ya tenía guardado en vez de pedirlo de nuevo — la
+  // app "actualizaría" a algo que ya tenías, sin ningún aviso de que falló.
+  if(req.url.indexOf(".apk") !== -1){
+    event.respondWith(fetch(req));
+    return;
+  }
+
   const esNavegacion = req.mode === "navigate" ||
     (req.destination === "document") ||
     (req.headers.get("accept") || "").includes("text/html");
