@@ -70,11 +70,16 @@ jobs:
         run: npx cap sync android
 
       - name: Numerar versión automáticamente
+        env:
+          # Los datos escritos a mano en Actions entran como variables de entorno
+          # (no pegados dentro del script): así unas comillas o un $( ) en el texto
+          # no rompen la compilación ni se ejecutan como comandos.
+          VERSION_INPUT: ${{ github.event.inputs.version }}
         run: |
           GRADLE=android/app/build.gradle
           # Si se lanzó a mano con un número de versión, se usa ese (ej: 9.12).
           # Si no, se arma uno de prueba con el número de ejecución.
-          VERSION="${{ github.event.inputs.version }}"
+          VERSION="$VERSION_INPUT"
           if [ -z "$VERSION" ]; then VERSION="9.10.${GITHUB_RUN_NUMBER}"; fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           # versionCode = número de compilación (siempre creciente)
@@ -107,6 +112,15 @@ jobs:
             -Pandroid.injected.signing.key.alias=cuentasclaras \
             -Pandroid.injected.signing.key.password=CuentasClaras2026
 
+      - name: Guardar el APK de GitHub
+        # Se copia YA, antes de convertir el proyecto en la versión de Play.
+        run: cp android/app/build/outputs/apk/release/app-release.apk CuentasClaras.apk
+
+      - name: Convertir el proyecto en la versión para Google Play
+        # Solo para el AAB: sin actualizador propio, sin donaciones, sin los
+        # permisos que Play restringe y apuntando a Android 16 (API 36).
+        run: node scripts/variante-play.js
+
       - name: Compilar el AAB firmado (para Play Store)
         run: |
           cd android
@@ -116,11 +130,38 @@ jobs:
             -Pandroid.injected.signing.key.alias=cuentasclaras \
             -Pandroid.injected.signing.key.password=CuentasClaras2026
 
-      - name: Renombrar el APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk CuentasClaras.apk
+      - name: Compilar un APK de prueba idéntico al de Play
+        # Mismo contenido que el AAB, pero instalable a mano, para probar en un
+        # celular cómo se verá la versión de Play antes de subirla. NO se publica.
+        run: |
+          cd android
+          ./gradlew assembleRelease --no-daemon \
+            -Pandroid.injected.signing.store.file="$(pwd)/app/cuentasclaras.keystore" \
+            -Pandroid.injected.signing.store.password=CuentasClaras2026 \
+            -Pandroid.injected.signing.key.alias=cuentasclaras \
+            -Pandroid.injected.signing.key.password=CuentasClaras2026
+          cp app/build/outputs/apk/release/app-release.apk ../CuentasClaras-PLAY-prueba.apk
 
       - name: Renombrar el AAB
         run: cp android/app/build/outputs/bundle/release/app-release.aab CuentasClaras.aab
+
+      - name: Verificar que cada versión quedó como debe
+        # Si algo no cuadra, la compilación FALLA aquí y no se publica nada.
+        run: |
+          AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2"
+          echo "=== APK de GitHub ==="
+          "$AAPT2" dump badging CuentasClaras.apk | grep -E "^package:|targetSdkVersion|uses-permission" | tee gh.txt
+          grep -q "REQUEST_INSTALL_PACKAGES" gh.txt || { echo "❌ El APK de GitHub perdió el permiso para instalar actualizaciones"; exit 1; }
+          unzip -p CuentasClaras.apk assets/public/index.html | grep -q 'const CC_CANAL = "github";' || { echo "❌ El APK de GitHub no quedó como versión GitHub"; exit 1; }
+          echo "=== Versión Play (APK de prueba, mismo contenido que el AAB) ==="
+          "$AAPT2" dump badging CuentasClaras-PLAY-prueba.apk | grep -E "^package:|targetSdkVersion|uses-permission" | tee play.txt
+          for p in REQUEST_INSTALL_PACKAGES USE_EXACT_ALARM; do
+            if grep -q "android.permission.$p'" play.txt; then echo "❌ La versión Play todavía pide $p"; exit 1; fi
+          done
+          grep -q "targetSdkVersion:'36'" play.txt || { echo "❌ La versión Play no apunta a Android 16 (API 36)"; exit 1; }
+          unzip -p CuentasClaras.aab base/assets/public/index.html | grep -q 'const CC_CANAL = "play";' || { echo "❌ El AAB no quedó marcado como versión Play"; exit 1; }
+          if unzip -p CuentasClaras.aab base/manifest/AndroidManifest.xml | strings | grep -qE "REQUEST_INSTALL_PACKAGES|USE_EXACT_ALARM"; then echo "❌ El AAB todavía pide un permiso restringido"; exit 1; fi
+          echo "✅ APK de GitHub y AAB de Play verificados"
 
       - name: Publicar el APK descargable
         uses: actions/upload-artifact@v4
@@ -136,28 +177,46 @@ jobs:
           path: CuentasClaras.aab
           retention-days: 90
 
+      - name: Publicar el APK de prueba de la versión Play
+        uses: actions/upload-artifact@v4
+        with:
+          name: CuentasClaras-PLAY-prueba-APK
+          path: CuentasClaras-PLAY-prueba.apk
+          retention-days: 30
+
       - name: Generar version.json
         if: ${{ github.event.inputs.version != '' }}
+        env:
+          VERSION_INPUT: ${{ github.event.inputs.version }}
+          NOVEDADES_INPUT: ${{ github.event.inputs.novedades }}
+          REPO: ${{ github.repository }}
         run: |
-          cat > version.json <<EOF
-          {
-            "version": "${{ github.event.inputs.version }}",
-            "url": "https://github.com/${{ github.repository }}/releases/download/v${{ github.event.inputs.version }}/CuentasClaras.apk",
-            "novedades": ${{ toJSON(github.event.inputs.novedades) }}
-          }
-          EOF
+          # Se arma con Node para que las comillas, saltos de línea o símbolos de las
+          # novedades queden bien escritos dentro del JSON.
+          node -e '
+            const v = process.env.VERSION_INPUT;
+            const info = {
+              version: v,
+              url: "https://github.com/" + process.env.REPO + "/releases/download/v" + v + "/CuentasClaras.apk",
+              novedades: process.env.NOVEDADES_INPUT || ""
+            };
+            require("fs").writeFileSync("version.json", JSON.stringify(info, null, 2) + "\n");
+          '
           cat version.json
 
       - name: Publicar Release en GitHub
         if: ${{ github.event.inputs.version != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_INPUT: ${{ github.event.inputs.version }}
+          TITULO_INPUT: ${{ github.event.inputs.titulo }}
+          NOVEDADES_INPUT: ${{ github.event.inputs.novedades }}
+          REPO: ${{ github.repository }}
         run: |
-          TAG="v${{ github.event.inputs.version }}"
-          REPO="${{ github.repository }}"
-          TITULO="${{ github.event.inputs.titulo }}"
-          if [ -z "$TITULO" ]; then TITULO="Cuentas Claras ${{ github.event.inputs.version }}"; fi
-          NOTAS="${{ github.event.inputs.novedades }}"
+          TAG="v$VERSION_INPUT"
+          TITULO="$TITULO_INPUT"
+          if [ -z "$TITULO" ]; then TITULO="Cuentas Claras $VERSION_INPUT"; fi
+          NOTAS="$NOVEDADES_INPUT"
           if [ -z "$NOTAS" ]; then NOTAS="Nueva versión de Cuentas Claras."; fi
           # Si ese tag ya tenía una Release publicada (ej: se corrigió algo antes de que
           # alguien la descargara), se reemplaza por completo en vez de fallar por duplicado
