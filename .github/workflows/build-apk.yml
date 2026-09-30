@@ -30,6 +30,10 @@ permissions:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    env:
+      # La contraseña de la firma vive en el secreto KEYSTORE_PASSWORD
+      # (Settings → Secrets and variables → Actions), nunca escrita aquí.
+      KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
 
     steps:
       - name: Bajar el codigo
@@ -91,6 +95,7 @@ jobs:
 
       - name: Restaurar la clave de firma
         run: |
+          if [ -z "$KS_PASS" ]; then echo "❌ Falta el secreto KEYSTORE_PASSWORD (Settings → Secrets and variables → Actions)"; exit 1; fi
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/cuentasclaras.keystore
           echo "Keystore restaurado en: $(pwd)/android/app/cuentasclaras.keystore"
           ls -la android/app/cuentasclaras.keystore
@@ -99,7 +104,7 @@ jobs:
         run: |
           keytool -list -v \
             -keystore android/app/cuentasclaras.keystore \
-            -storepass CuentasClaras2026 \
+            -storepass "$KS_PASS" \
             -alias cuentasclaras | grep -A1 "SHA256:"
 
       - name: Compilar el APK firmado
@@ -108,9 +113,9 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="$(pwd)/app/cuentasclaras.keystore" \
-            -Pandroid.injected.signing.store.password=CuentasClaras2026 \
+            -Pandroid.injected.signing.store.password="$KS_PASS" \
             -Pandroid.injected.signing.key.alias=cuentasclaras \
-            -Pandroid.injected.signing.key.password=CuentasClaras2026
+            -Pandroid.injected.signing.key.password="$KS_PASS"
 
       - name: Guardar el APK de GitHub
         # Se copia YA, antes de convertir el proyecto en la versión de Play.
@@ -126,9 +131,9 @@ jobs:
           cd android
           ./gradlew bundleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="$(pwd)/app/cuentasclaras.keystore" \
-            -Pandroid.injected.signing.store.password=CuentasClaras2026 \
+            -Pandroid.injected.signing.store.password="$KS_PASS" \
             -Pandroid.injected.signing.key.alias=cuentasclaras \
-            -Pandroid.injected.signing.key.password=CuentasClaras2026
+            -Pandroid.injected.signing.key.password="$KS_PASS"
 
       - name: Compilar un APK de prueba idéntico al de Play
         # Mismo contenido que el AAB, pero instalable a mano, para probar en un
@@ -137,9 +142,9 @@ jobs:
           cd android
           ./gradlew assembleRelease --no-daemon \
             -Pandroid.injected.signing.store.file="$(pwd)/app/cuentasclaras.keystore" \
-            -Pandroid.injected.signing.store.password=CuentasClaras2026 \
+            -Pandroid.injected.signing.store.password="$KS_PASS" \
             -Pandroid.injected.signing.key.alias=cuentasclaras \
-            -Pandroid.injected.signing.key.password=CuentasClaras2026
+            -Pandroid.injected.signing.key.password="$KS_PASS"
           cp app/build/outputs/apk/release/app-release.apk ../CuentasClaras-PLAY-prueba.apk
 
       - name: Renombrar el AAB
