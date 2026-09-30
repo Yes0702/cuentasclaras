@@ -1,0 +1,84 @@
+name: Respaldo de la firma (manual)
+
+# Saca una copia de la llave de firma (guardada en el secreto KEYSTORE_BASE64)
+# dentro de un .zip protegido con la clave del secreto RESPALDO_CLAVE, para
+# guardarla fuera de GitHub. Solo corre cuando se lanza a mano desde la pestaña
+# Actions; nunca con un push. El repositorio es público: por eso la llave NUNCA
+# sale suelta, solo cifrada, y el archivo se borra solo a las 24 horas.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Revisar que existan los secretos
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          RESPALDO_CLAVE: ${{ secrets.RESPALDO_CLAVE }}
+        run: |
+          [ -n "$KEYSTORE_BASE64" ] || { echo "❌ Falta el secreto KEYSTORE_BASE64"; exit 1; }
+          [ -n "$KS_PASS" ] || { echo "❌ Falta el secreto KEYSTORE_PASSWORD (Settings → Secrets and variables → Actions)"; exit 1; }
+          [ -n "$RESPALDO_CLAVE" ] || { echo "❌ Falta el secreto RESPALDO_CLAVE (la clave con la que se protege el .zip)"; exit 1; }
+          [ ${#RESPALDO_CLAVE} -ge 10 ] || { echo "❌ RESPALDO_CLAVE es muy corta: usa al menos 10 caracteres"; exit 1; }
+          echo "✅ Secretos listos"
+
+      - name: Recuperar la llave y comprobar que es la correcta
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          mkdir respaldo
+          echo "$KEYSTORE_BASE64" | base64 -d > respaldo/cuentasclaras.keystore
+          # La misma llave en texto (base64), por si algún día hay que volver a
+          # crear el secreto KEYSTORE_BASE64: se pega tal cual.
+          echo "$KEYSTORE_BASE64" > respaldo/KEYSTORE_BASE64.txt
+          HUELLA=$(keytool -list -v -keystore respaldo/cuentasclaras.keystore -storepass "$KS_PASS" -alias cuentasclaras | grep "SHA256:" | head -1 | sed 's/.*SHA256: *//')
+          ESPERADA="63:F7:DA:C2:15:31:CC:E3:2F:6E:89:7A:18:88:44:EF:CB:1F:96:55:CA:0A:A4:C1:E1:D7:6A:56:C3:4D:D9:A8"
+          echo "Huella de la llave: $HUELLA"
+          [ "$HUELLA" = "$ESPERADA" ] || { echo "❌ La huella no coincide con la de la app publicada"; exit 1; }
+          echo "✅ Es la misma firma con la que se publica la app"
+          cat > respaldo/LEEME.txt <<EOF
+          RESPALDO DE LA FIRMA DE CUENTAS CLARAS
+          ======================================
+          Guarda este .zip en al menos DOS lugares seguros (ej. Google Drive y
+          una memoria USB). Sin esta llave NUNCA más se podría actualizar la app
+          con la misma firma.
+
+          Archivos:
+          - cuentasclaras.keystore  -> la llave de firma
+          - KEYSTORE_BASE64.txt     -> la misma llave en texto, para volver a
+                                       crear el secreto KEYSTORE_BASE64 en GitHub
+
+          Datos de la llave:
+          - Alias (nombre de la llave): cuentasclaras
+          - Contraseña del almacén y de la llave: $KS_PASS
+          - Huella SHA-256: $ESPERADA
+
+          Generado el $(date -u +"%Y-%m-%d %H:%M UTC") desde GitHub Actions.
+          EOF
+
+      - name: Proteger con clave (zip cifrado AES-256)
+        env:
+          RESPALDO_CLAVE: ${{ secrets.RESPALDO_CLAVE }}
+        run: |
+          command -v 7z >/dev/null || sudo apt-get install -y p7zip-full
+          cd respaldo
+          7z a -tzip -mem=AES256 -p"$RESPALDO_CLAVE" ../Respaldo-firma-CuentasClaras.zip cuentasclaras.keystore KEYSTORE_BASE64.txt LEEME.txt > /dev/null
+          cd ..
+          rm -rf respaldo
+          # Comprobar que el .zip abre con la clave y que sin ella no se puede
+          7z t -p"$RESPALDO_CLAVE" Respaldo-firma-CuentasClaras.zip > /dev/null && echo "✅ El .zip abre con tu clave"
+          if 7z t -p"clave-equivocada" Respaldo-firma-CuentasClaras.zip > /dev/null 2>&1; then echo "❌ El .zip abre sin la clave correcta"; exit 1; fi
+          echo "✅ Sin la clave no se puede abrir"
+
+      - name: Entregar el .zip (se borra solo en 24 horas)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Respaldo-firma-CuentasClaras
+          path: Respaldo-firma-CuentasClaras.zip
+          retention-days: 1
