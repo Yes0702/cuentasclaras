@@ -112,15 +112,54 @@
   }
   .score.show { display: block; }
   .score strong { color: var(--accent); font-size: 1.5rem; }
+  .hint { margin-top: 6px !important; font-size: .9rem; }
+  .status {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    border-bottom: 1px solid var(--border); padding: 10px 16px;
+  }
+  .status-row {
+    max-width: 820px; margin: 0 auto; display: flex; flex-wrap: wrap;
+    align-items: center; gap: 8px 18px; font-size: .95rem;
+  }
+  .status-row .btn { margin-left: auto; }
+  .okc { color: var(--ok); }
+  .badc { color: var(--bad); }
+  .progress { max-width: 820px; margin: 8px auto 0; height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+  #bar { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .fill-row { display: flex; gap: 8px; }
+  .fill-row .fill { flex: 1; min-width: 0; }
+  .btn.small { padding: 7px 14px; font-size: .9rem; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .opt:has(input:disabled) { cursor: default; }
+  .q.correct .opt:hover, .q.wrong .opt:hover { background: none; }
+  .q.correct .opt.is-correct:hover, .q.wrong .opt.is-correct:hover { background: var(--ok-bg); }
+  .q.wrong .opt.is-wrong:hover { background: var(--bad-bg); }
+  .feedback.ok .verse { color: var(--text); font-weight: normal; }
+  .by-ch { list-style: none; padding: 0; margin: 10px 0 0; font-size: 1rem; }
+  .shake { animation: shake .3s; border-color: var(--bad) !important; }
+  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  .score { margin-bottom: 40px; }
 </style>
 </head>
 <body>
 <header>
   <h1>Examen del libro de Daniel</h1>
-  <p>Capítulos 1 al 6 · Reina Valera 1995 · 20 preguntas por capítulo</p>
+  <p>Capítulos 1 al 6 · Reina Valera 1995 · 150 preguntas revueltas (25 por capítulo)</p>
+  <p class="hint">Cada respuesta queda fija en cuanto la eliges o la escribes: ¡piénsala bien!</p>
 </header>
-<nav class="tabs" id="tabs"></nav>
-<main id="app"></main>
+<div class="status">
+  <div class="status-row">
+    <span>Respondidas: <b id="count">0 / 150</b></span>
+    <span class="okc">✓ <b id="right">0</b></span>
+    <span class="badc">✗ <b id="wrongc">0</b></span>
+    <button class="btn small secondary" id="restart">Nuevo examen</button>
+  </div>
+  <div class="progress"><div id="bar"></div></div>
+</div>
+<main>
+  <div id="app"></div>
+  <div class="score" id="final"></div>
+</main>
 
 <script>
 // Versículos citados en la retroalimentación (Reina Valera 1995)
@@ -133,15 +172,18 @@ const V = {
   "1:6": "Entre ellos estaban Daniel, Ananías, Misael y Azarías, de los hijos de Judá.",
   "1:7": "A estos el jefe de los eunucos puso nombres: a Daniel, Beltsasar; a Ananías, Sadrac; a Misael, Mesac; y a Azarías, Abed-nego.",
   "1:8": "Daniel propuso en su corazón no contaminarse con la porción de la comida del rey ni con el vino que él bebía; pidió, por tanto, al jefe de los eunucos que no se le obligara a contaminarse.",
+  "1:9": "Puso Dios a Daniel en gracia y en buena voluntad con el jefe de los eunucos;",
   "1:10": "y el jefe de los eunucos dijo a Daniel: —Temo a mi señor el rey, que asignó vuestra comida y vuestra bebida; pues luego que él vea vuestros rostros más pálidos que los de los muchachos que son semejantes a vosotros, haréis que el rey me condene a muerte.",
   "1:11": "Entonces dijo Daniel a Melsar, a quien el jefe de los eunucos había puesto sobre Daniel, Ananías, Misael y Azarías:",
   "1:12": "—Te ruego que hagas la prueba con tus siervos durante diez días: que nos den legumbres para comer y agua para beber.",
   "1:15": "Y al cabo de los diez días pareció el rostro de ellos mejor y más robusto que el de los otros muchachos que comían de la porción de la comida del rey.",
+  "1:16": "Así, pues, Melsar se llevaba la porción de la comida de ellos y el vino que habían de beber, y les daba legumbres.",
   "1:17": "A estos cuatro muchachos, Dios les dio conocimiento e inteligencia en todas las letras y ciencias; y Daniel tuvo entendimiento en toda visión y sueños.",
   "1:20": "En todo asunto de sabiduría e inteligencia que el rey los consultó, los halló diez veces mejores que todos los magos y astrólogos que había en todo su reino.",
   "1:21": "Así continuó Daniel hasta el año primero del rey Ciro.",
 
   "2:1": "En el segundo año del reinado de Nabucodonosor, tuvo Nabucodonosor sueños, y se turbó su espíritu y se le fue el sueño.",
+  "2:2": "Hizo llamar el rey a magos, astrólogos, encantadores y caldeos, para que le explicaran sus sueños. Vinieron, pues, y se presentaron delante del rey.",
   "2:4": "Entonces hablaron los caldeos al rey en lengua aramea: —¡Rey, para siempre vive! Cuenta el sueño a tus siervos, y te daremos la interpretación.",
   "2:5": "Respondió el rey y dijo a los caldeos: —El asunto lo olvidé; pero si no me decís el sueño y su interpretación, seréis hechos pedazos y vuestras casas serán convertidas en estercoleros.",
   "2:11": "Porque el asunto que el rey demanda es difícil, y no hay quien lo pueda declarar al rey, salvo los dioses cuya morada no está entre los hombres.",
@@ -149,6 +191,7 @@ const V = {
   "2:14": "Entonces Daniel habló sabia y prudentemente a Arioc, capitán de la guardia del rey, que había salido para matar a los sabios de Babilonia.",
   "2:16": "y Daniel entró y pidió al rey que le concediera tiempo, que él daría al rey la interpretación.",
   "2:19": "El secreto le fue revelado a Daniel en visión de noche, por lo cual bendijo Daniel al Dios del cielo.",
+  "2:20": "Habló Daniel y dijo: «Sea bendito el nombre de Dios de siglos en siglos, porque suyos son el poder y la sabiduría.",
   "2:21": "Él muda los tiempos y las edades, quita reyes y pone reyes; da la sabiduría a los sabios y la ciencia a los entendidos.",
   "2:30": "Y a mí me ha sido revelado este misterio, no porque en mí haya más sabiduría que en los demás vivientes, sino para que se dé a conocer al rey la interpretación y para que entiendas los pensamientos de tu corazón.",
   "2:32": "La cabeza de esta imagen era de oro fino; su pecho y sus brazos, de plata; su vientre y sus muslos, de bronce;",
@@ -158,29 +201,40 @@ const V = {
   "2:38": "Dondequiera que habitan hijos de hombres, bestias del campo y aves del cielo, él los ha entregado en tus manos, y te ha dado el dominio sobre todo. Tú eres aquella cabeza de oro.",
   "2:40": "Y el cuarto reino será fuerte como el hierro; y como el hierro desmenuza y rompe todas las cosas, así él lo desmenuzará y lo quebrantará todo.",
   "2:44": "En los días de estos reyes, el Dios del cielo levantará un reino que no será jamás destruido, ni será el reino dejado a otro pueblo; desmenuzará y consumirá a todos estos reinos, pero él permanecerá para siempre,",
+  "2:46": "Entonces el rey Nabucodonosor se postró sobre su rostro, se humilló ante Daniel, y mandó que le ofrecieran presentes e incienso.",
+  "2:47": "El rey habló a Daniel, y dijo: —Ciertamente el Dios vuestro es Dios de dioses, Señor de los reyes y el que revela los misterios, pues pudiste revelar este misterio.",
   "2:48": "Entonces el rey engrandeció a Daniel, le dio muchos honores y grandes dones, y lo hizo gobernador de toda la provincia de Babilonia y jefe supremo de todos los sabios de Babilonia.",
+  "2:49": "Daniel solicitó y obtuvo del rey que pusiera sobre los negocios de la provincia de Babilonia a Sadrac, Mesac y Abed-nego; y Daniel estaba en la corte del rey.",
 
   "3:1": "El rey Nabucodonosor hizo una estatua de oro, cuya altura era de sesenta codos y la anchura de seis codos; la levantó en el campo de Dura, en la provincia de Babilonia.",
+  "3:2": "Y ordenó el rey Nabucodonosor que se reunieran los sátrapas, los magistrados, capitanes, oidores, tesoreros, consejeros, jueces y todos los gobernadores de las provincias, para que vinieran a la dedicación de la estatua que el rey Nabucodonosor había levantado.",
+  "3:4": "Y el pregonero anunciaba en alta voz: «Se os ordena a vosotros, pueblos, naciones y lenguas,",
   "3:5": "que al oír el son de la bocina, la flauta, la cítara, el arpa, el salterio, la zampoña y todo instrumento de música, os postréis y adoréis la estatua de oro que el rey Nabucodonosor ha levantado;",
   "3:6": "y cualquiera que no se postre y adore, inmediatamente será echado dentro de un horno de fuego ardiente.",
   "3:8": "Por esto, en aquel tiempo algunos hombres caldeos vinieron y acusaron maliciosamente a los judíos.",
   "3:15": "Ahora, pues, ¿estáis dispuestos para que, al oír el son de la bocina, la flauta, la cítara, el arpa, el salterio, la zampoña y todo instrumento de música, os postréis y adoréis la estatua que he hecho? Porque si no la adoráis, en la misma hora seréis echados en medio de un horno de fuego ardiente, ¿y qué dios será el que os libre de mis manos?",
+  "3:16": "Sadrac, Mesac y Abed-nego respondieron al rey Nabucodonosor, diciendo: —No es necesario que te respondamos sobre este asunto.",
   "3:17": "Nuestro Dios, a quien servimos, puede librarnos del horno de fuego ardiente; y de tus manos, rey, nos librará.",
   "3:18": "Y si no, has de saber, oh rey, que no serviremos a tus dioses ni tampoco adoraremos la estatua que has levantado.",
   "3:19": "Entonces Nabucodonosor se llenó de ira, cambió el aspecto de su rostro contra Sadrac, Mesac y Abed-nego y ordenó que el horno se calentara siete veces más de lo acostumbrado.",
   "3:21": "Así pues, estos hombres fueron atados con sus mantos, sus calzados, sus turbantes y sus vestidos, y fueron echados dentro del horno de fuego ardiente.",
   "3:22": "Y como la orden del rey era apremiante, y habían calentado mucho el horno, la llama del fuego mató a aquellos que habían alzado a Sadrac, Mesac y Abed-nego.",
+  "3:24": "Entonces el rey Nabucodonosor se espantó, se levantó apresuradamente y dijo a los de su consejo: —¿No echaron a tres hombres atados dentro del fuego? Ellos respondieron al rey: —Es verdad, oh rey.",
   "3:25": "Y él dijo: —Sin embargo, yo veo cuatro hombres sueltos, que se pasean en medio del fuego sin sufrir ningún daño; y el aspecto del cuarto es semejante a un hijo de los dioses.",
   "3:26": "Entonces Nabucodonosor se acercó a la puerta del horno de fuego ardiente, y dijo: —Sadrac, Mesac y Abed-nego, siervos del Dios Altísimo, salid y venid. Sadrac, Mesac y Abed-nego salieron de en medio del fuego.",
   "3:27": "Y se juntaron los sátrapas, los gobernadores, los capitanes y los consejeros del rey para mirar a estos hombres, cómo el fuego no había tenido poder alguno sobre sus cuerpos y ni aun el cabello de sus cabezas se había quemado; sus ropas, intactas, ni siquiera olor de fuego tenían.",
   "3:28": "Y Nabucodonosor dijo: «Bendito sea el Dios de Sadrac, Mesac y Abed-nego, que envió su ángel y libró a sus siervos que confiaron en él, los cuales no cumplieron el edicto del rey y entregaron sus cuerpos antes que servir y adorar a otro dios que su Dios.",
   "3:29": "Por lo tanto, decreto que todo pueblo, nación o lengua que diga blasfemia contra el Dios de Sadrac, Mesac y Abed-nego, sea descuartizado, y su casa convertida en estercolero; por cuanto no hay dios que pueda librar como este.»",
+  "3:30": "Entonces el rey engrandeció a Sadrac, Mesac y Abed-nego en la provincia de Babilonia.",
 
   "4:1": "«Nabucodonosor, rey, a todos los pueblos, naciones y lenguas que moran en toda la tierra: Paz os sea multiplicada.",
   "4:3": "¡Cuán grandes son sus señales y cuán potentes sus maravillas! Su reino, reino sempiterno; su señorío, de generación en generación.",
   "4:4": "»Yo, Nabucodonosor, estaba tranquilo en mi casa, floreciente en mi palacio.",
+  "4:5": "Tuve un sueño que me espantó; tendido en la cama, las imaginaciones y visiones de mi cabeza me turbaron.",
+  "4:9": "“Beltsasar, jefe de los magos, ya que he entendido que hay en ti espíritu de los dioses santos y que ningún misterio se te esconde, declárame las visiones de mi sueño que he visto, y su interpretación.",
   "4:10": "Estas fueron las visiones de mi cabeza mientras estaba en mi cama: »”Me parecía ver en medio de la tierra un árbol cuya altura era grande.",
   "4:11": "Crecía este árbol, y se hacía fuerte, y su copa llegaba hasta el cielo y se le alcanzaba a ver desde todos los confines de la tierra.",
+  "4:12": "Su follaje era hermoso, su fruto abundante y había en él alimento para todos. Debajo de él, a su sombra, se ponían las bestias del campo, en sus ramas anidaban las aves del cielo y se mantenía de él todo ser viviente.",
   "4:13": "»”Vi en las visiones de mi cabeza, mientras estaba en mi cama, que un vigilante y santo descendía del cielo.",
   "4:15": "Mas la cepa de sus raíces dejaréis en la tierra, con atadura de hierro y de bronce entre la hierba del campo; que lo empape el rocío del cielo, y con las bestias sea su parte entre la hierba de la tierra.",
   "4:16": "Su corazón de hombre sea cambiado y le sea dado corazón de bestia, y pasen sobre él siete tiempos.",
@@ -191,6 +245,7 @@ const V = {
   "4:27": "Por tanto, oh rey, acepta mi consejo: redime tus pecados con justicia, y tus iniquidades haciendo misericordias con los oprimidos, pues tal vez será eso una prolongación de tu tranquilidad.",
   "4:29": "Al cabo de doce meses, paseando por el palacio real de Babilonia,",
   "4:30": "habló el rey y dijo: «¿No es esta la gran Babilonia que yo edifiqué para casa real con la fuerza de mi poder, y para gloria de mi majestad?»",
+  "4:31": "Aún estaba la palabra en la boca del rey, cuando vino una voz del cielo: «A ti se te dice, rey Nabucodonosor: “El reino te ha sido quitado;",
   "4:33": "En la misma hora se cumplió la palabra sobre Nabucodonosor: Fue echado de entre los hombres, comía hierba como los bueyes y su cuerpo se empapaba del rocío del cielo, hasta que su pelo creció como plumas de águila y sus uñas como las de las aves.",
   "4:34": "«Al fin del tiempo, yo, Nabucodonosor, alcé mis ojos al cielo y mi razón me fue devuelta; bendije al Altísimo, y alabé y glorifiqué al que vive para siempre: »“Su dominio es sempiterno; su reino, por todas las edades.",
   "4:37": "»Ahora yo, Nabucodonosor, alabo, engrandezco y glorifico al Rey del cielo, porque todas sus obras son verdaderas y sus caminos justos; y él puede humillar a los que andan con soberbia.»",
@@ -201,15 +256,20 @@ const V = {
   "5:5": "En aquella misma hora aparecieron los dedos de una mano de hombre que escribía delante del candelabro, sobre lo encalado de la pared del palacio real; y el rey veía la mano que escribía.",
   "5:6": "Entonces el rey palideció y sus pensamientos lo turbaron, se debilitaron sus caderas y sus rodillas daban la una contra la otra.",
   "5:7": "El rey gritó en alta voz que hicieran venir magos, caldeos y adivinos; y dijo el rey a los sabios de Babilonia: «Cualquiera que lea esta escritura y me dé su interpretación, será vestido de púrpura, llevará en su cuello un collar de oro y será el tercer señor en el reino.»",
+  "5:8": "Entonces fueron introducidos todos los sabios del rey, pero no pudieron leer la escritura ni dar al rey su interpretación.",
   "5:10": "La reina, por las palabras del rey y de sus príncipes, entró a la sala del banquete, y dijo: —¡Rey, vive para siempre! No te turben tus pensamientos ni palidezca tu rostro.",
+  "5:11": "En tu reino hay un hombre en el que mora el espíritu de los dioses santos, y en los días de tu padre se halló en él luz, inteligencia y sabiduría, como la sabiduría de los dioses. El rey Nabucodonosor, tu padre, oh rey, lo constituyó jefe sobre todos los magos, astrólogos, caldeos y adivinos,",
+  "5:12": "por cuanto en él se halló más espíritu, ciencia y entendimiento para interpretar sueños, descifrar enigmas y resolver dudas; esto es, en Daniel, al cual el rey puso por nombre Beltsasar. Llámese, pues, ahora a Daniel, y él te dará la interpretación.",
   "5:17": "Entonces Daniel respondió y dijo al rey: —Tus dones sean para ti; da tus recompensas a otros. Leeré la escritura al rey y le daré la interpretación.",
   "5:20": "Pero cuando su corazón se ensoberbeció y su espíritu se endureció en su orgullo, fue depuesto del trono de su reino y despojado de su gloria.",
   "5:21": "Fue echado de entre los hijos de los hombres, su mente se hizo semejante a la de las bestias y con los asnos monteses fue su habitación. Le hicieron comer hierba, como al buey, y su cuerpo se empapó del rocío del cielo, hasta que reconoció que el Altísimo Dios tiene dominio sobre el reino de los hombres, y que pone sobre él al que le place.",
   "5:22": "Pero tú, su hijo Belsasar, no has humillado tu corazón sabiendo todo esto,",
+  "5:23": "sino que contra el Señor del cielo te has ensoberbecido; hiciste traer ante ti los vasos de su Casa, y tú y tus grandes, tus mujeres y tus concubinas bebisteis vino de ellos; además diste alabanza a dioses de plata y oro, de bronce, de hierro, de madera y de piedra, que ni ven ni oyen ni saben; pero nunca honraste al Dios en cuya mano está tu vida y de quien son todos tus caminos.",
   "5:25": "Y la escritura que trazó es: “Mene, Mene, Tekel, Uparsin.”",
   "5:26": "Esta es la interpretación del asunto: “Mene”: Contó Dios tu reino y le ha puesto fin.",
   "5:27": "“Tekel”: Pesado has sido en balanza y hallado falto.",
   "5:28": "“Peres”: Tu reino ha sido roto y dado a los medos y a los persas.",
+  "5:29": "Entonces Belsasar mandó vestir a Daniel de púrpura, poner en su cuello un collar de oro y proclamar que él era el tercer señor del reino.",
   "5:30": "La misma noche fue muerto Belsasar, rey de los caldeos.",
   "5:31": "Y Darío, de Media, cuando tenía sesenta y dos años, tomó el reino.",
 
@@ -221,16 +281,19 @@ const V = {
   "6:7": "Todos los gobernadores del reino, magistrados, sátrapas, príncipes y capitanes han acordado por consejo que promulgues un edicto real, y lo confirmes, ordenando que cualquiera que en el espacio de treinta días demande petición de cualquier dios u hombre fuera de ti, rey, sea echado al foso de los leones.",
   "6:8": "Ahora, pues, oh rey, confirma el edicto y fírmalo, para que no pueda ser revocado, conforme a la ley de Media y de Persia, que no puede ser abrogada.",
   "6:10": "Cuando Daniel supo que el edicto había sido firmado, entró en su casa; abiertas las ventanas de su habitación que daban a Jerusalén, se arrodillaba tres veces al día, oraba y daba gracias delante de su Dios como solía hacerlo antes.",
+  "6:13": "Entonces respondieron y dijeron delante del rey: —Daniel, que es de los hijos de los cautivos de Judá, no te respeta a ti, rey, ni acata el edicto que confirmaste, sino que tres veces al día hace su petición.",
   "6:14": "Cuando el rey oyó el asunto, le pesó en gran manera y resolvió librar a Daniel; y hasta la puesta del sol trabajó para librarlo.",
   "6:16": "Entonces el rey ordenó que trajeran a Daniel, y lo echaron al foso de los leones. El rey dijo a Daniel: —El Dios tuyo, a quien tú continuamente sirves, él te libre.",
   "6:17": "Trajeron una piedra y la pusieron sobre la puerta del foso, la cual selló el rey con su anillo y con el anillo de sus príncipes, para que el acuerdo acerca de Daniel no se cambiara.",
   "6:18": "Luego el rey se fue a su palacio, y se acostó en ayunas; no trajeron ante él instrumentos musicales, y se le fue el sueño.",
   "6:19": "El rey se levantó muy de mañana, y fue apresuradamente al foso de los leones.",
   "6:20": "Acercándose al foso, llamó a gritos a Daniel con voz triste, y le dijo: —Daniel, siervo del Dios viviente, el Dios tuyo, a quien tú continuamente sirves, ¿te ha podido librar de los leones?",
+  "6:21": "Entonces Daniel respondió al rey: —¡Rey, vive para siempre!",
   "6:22": "Mi Dios envió su ángel, el cual cerró la boca de los leones para que no me hicieran daño, porque ante él fui hallado inocente; y aun delante de ti, oh rey, yo no he hecho nada malo.",
   "6:23": "Se alegró el rey en gran manera a causa de él, y mandó sacar a Daniel del foso. Sacaron, pues, del foso a Daniel, pero ninguna lesión se halló en él, porque había confiado en su Dios.",
   "6:24": "Luego ordenó el rey que trajeran a aquellos hombres que habían acusado a Daniel, y fueron echados al foso de los leones ellos, sus hijos y sus mujeres; y aún no habían llegado al fondo del foso, cuando los leones se apoderaron de ellos y quebraron todos sus huesos.",
   "6:26": "De parte mía es promulgada esta ordenanza: “Que en todo el dominio de mi reino, todos teman y tiemblen ante la presencia del Dios de Daniel. »”Porque él es el Dios viviente y permanece por todos los siglos, su reino no será jamás destruido y su dominio perdurará hasta el fin.",
+  "6:27": "Él salva y libra, y hace señales y maravillas en el cielo y en la tierra; él ha librado a Daniel del poder de los leones.”»",
   "6:28": "Daniel prosperó durante los reinados de Darío y de Ciro, el persa."
 };
 
@@ -257,7 +320,12 @@ const CHAPTERS = [
     { t: "m", q: "¿Cómo se veían sus rostros al cabo de los diez días?", o: ["Mejor y más robustos que los de los otros muchachos", "Más pálidos que los de los demás", "Igual que los de los demás", "Cansados y débiles"], v: "1:15" },
     { t: "f", q: "Daniel tuvo entendimiento en toda visión y ________.", a: ["sueños", "sueño"], v: "1:17" },
     { t: "m", q: "¿Cuántas veces mejores que todos los magos y astrólogos los halló el rey?", o: ["Diez veces", "Siete veces", "Dos veces", "Cien veces"], v: "1:20" },
-    { t: "f", q: "Así continuó Daniel hasta el año primero del rey ________.", a: ["Ciro"], v: "1:21" }
+    { t: "f", q: "Así continuó Daniel hasta el año primero del rey ________.", a: ["Ciro"], v: "1:21" },
+    { t: "f", q: "Puso Dios a Daniel en gracia y en buena voluntad con el jefe de los ________.", a: ["eunucos"], v: "1:9" },
+    { t: "m", q: "¿Quién entregó a Joacim, rey de Judá, en manos de Nabucodonosor?", o: ["El Señor", "Los caldeos", "El rey de Egipto", "Su propio ejército"], v: "1:2" },
+    { t: "f", q: "Nabucodonosor sitió Jerusalén en el tercer año del reinado de ________, rey de Judá.", a: ["Joacim"], v: "1:1" },
+    { t: "m", q: "¿Qué les dio Dios a los cuatro muchachos?", o: ["Conocimiento e inteligencia en todas las letras y ciencias", "Riquezas y tierras en Babilonia", "Cargos en el ejército del rey", "Permiso para volver a Judá"], v: "1:17" },
+    { t: "m", q: "Después de la prueba, ¿qué hacía Melsar con la comida del rey destinada a ellos?", o: ["Se la llevaba y les daba legumbres", "Se la daba a los otros muchachos", "La devolvía al rey", "Se la daba solo a Daniel"], v: "1:16" }
   ]},
   { n: 2, title: "Daniel interpreta el sueño de Nabucodonosor", q: [
     { t: "m", q: "¿En qué año de su reinado tuvo Nabucodonosor sueños que turbaron su espíritu?", o: ["En el segundo año", "En el primer año", "En el tercer año", "En el décimo año"], v: "2:1" },
@@ -279,7 +347,12 @@ const CHAPTERS = [
     { t: "m", q: "Según la interpretación, ¿quién era la cabeza de oro?", o: ["El rey Nabucodonosor", "El rey Ciro", "El rey Darío", "El rey Belsasar"], v: "2:38" },
     { t: "m", q: "¿Cómo sería el cuarto reino?", o: ["Fuerte como el hierro, que desmenuza y rompe todas las cosas", "Inferior al reino de Nabucodonosor, como la plata", "Débil como el barro", "Brillante como el oro"], v: "2:40" },
     { t: "m", q: "¿Cómo sería el reino que levantará el Dios del cielo?", o: ["Nunca será destruido y permanecerá para siempre", "Durará siete tiempos", "Será dividido entre medos y persas", "Será en parte fuerte y en parte frágil"], v: "2:44" },
-    { t: "m", q: "¿Qué cargo le dio el rey a Daniel?", o: ["Gobernador de toda la provincia de Babilonia y jefe supremo de los sabios", "Capitán de la guardia del rey", "Jefe de los eunucos", "Tercer señor del reino"], v: "2:48" }
+    { t: "m", q: "¿Qué cargo le dio el rey a Daniel?", o: ["Gobernador de toda la provincia de Babilonia y jefe supremo de los sabios", "Capitán de la guardia del rey", "Jefe de los eunucos", "Tercer señor del reino"], v: "2:48" },
+    { t: "m", q: "¿A quiénes hizo llamar el rey para que le explicaran sus sueños?", o: ["A magos, astrólogos, encantadores y caldeos", "A los profetas de Judá", "A los sacerdotes del templo", "A sus capitanes y consejeros"], v: "2:2" },
+    { t: "f", q: "«Sea bendito el nombre de Dios de siglos en siglos, porque suyos son el poder y la ________.»", a: ["sabiduría", "sabiduria"], v: "2:20" },
+    { t: "m", q: "¿Qué hizo Nabucodonosor después de oír la interpretación?", o: ["Se postró sobre su rostro y mandó ofrecer a Daniel presentes e incienso", "Mandó echar a Daniel al horno", "Se enojó y despidió a Daniel", "Mandó construir una estatua de oro"], v: "2:46" },
+    { t: "f", q: "«Ciertamente el Dios vuestro es Dios de ________, Señor de los reyes.»", a: ["dioses"], v: "2:47" },
+    { t: "m", q: "¿A quiénes pidió Daniel que el rey pusiera sobre los negocios de la provincia de Babilonia?", o: ["A Sadrac, Mesac y Abed-nego", "A Arioc y Aspenaz", "A Melsar y Aspenaz", "A los caldeos"], v: "2:49" }
   ]},
   { n: 3, title: "El horno de fuego", q: [
     { t: "m", q: "¿De qué material era la estatua que hizo Nabucodonosor?", o: ["De oro", "De plata", "De bronce", "De piedra"], v: "3:1" },
@@ -301,7 +374,12 @@ const CHAPTERS = [
     { t: "m", q: "¿Cómo salieron los tres jóvenes del horno?", o: ["Ni el cabello se había quemado y ni olor de fuego tenían", "Con quemaduras leves", "Con la ropa quemada pero sin heridas", "Desmayados por el calor"], v: "3:27" },
     { t: "f", q: "«Bendito sea el Dios de Sadrac, Mesac y Abed-nego, que envió su ________ y libró a sus siervos.»", a: ["ángel", "angel"], v: "3:28" },
     { t: "m", q: "¿Qué decretó el rey contra quien dijera blasfemia contra el Dios de ellos?", o: ["Que fuera descuartizado y su casa convertida en estercolero", "Que fuera echado al horno", "Que pagara un tributo", "Que fuera echado al foso de los leones"], v: "3:29" },
-    { t: "f", q: "«...por cuanto no hay dios que pueda librar como ________.»", a: ["este", "éste"], v: "3:29" }
+    { t: "f", q: "«...por cuanto no hay dios que pueda librar como ________.»", a: ["este", "éste"], v: "3:29" },
+    { t: "m", q: "¿Quiénes fueron convocados a la dedicación de la estatua?", o: ["Los sátrapas, magistrados, capitanes, jueces y gobernadores de las provincias", "Solo los sacerdotes de Babilonia", "Los hijos de Judá", "Los reyes de Media y Persia"], v: "3:2" },
+    { t: "f", q: "El ________ anunciaba en alta voz la orden del rey a pueblos, naciones y lenguas.", a: ["pregonero"], v: "3:4" },
+    { t: "m", q: "¿Qué respondieron primero Sadrac, Mesac y Abed-nego al rey?", o: ["No es necesario que te respondamos sobre este asunto", "Danos tiempo para pensarlo", "Adoraremos la estatua, oh rey", "Rey, para siempre vive"], v: "3:16" },
+    { t: "m", q: "Cuando el rey preguntó si habían echado a tres hombres atados al fuego, ¿qué le respondieron?", o: ["Es verdad, oh rey", "No, eran cuatro", "No lo sabemos", "Solo echamos a dos"], v: "3:24" },
+    { t: "f", q: "El rey engrandeció a Sadrac, Mesac y Abed-nego en la provincia de ________.", a: ["Babilonia"], v: "3:30" }
   ]},
   { n: 4, title: "La locura de Nabucodonosor", q: [
     { t: "m", q: "¿A quiénes dirige Nabucodonosor su mensaje al inicio del capítulo?", o: ["A todos los pueblos, naciones y lenguas que moran en toda la tierra", "Solo a los sabios de Babilonia", "A los hijos de Judá", "A los sátrapas de su reino"], v: "4:1" },
@@ -323,7 +401,12 @@ const CHAPTERS = [
     { t: "f", q: "«¿No es esta la gran ________ que yo edifiqué para casa real con la fuerza de mi poder?»", a: ["Babilonia"], v: "4:30" },
     { t: "m", q: "¿Cómo creció el pelo de Nabucodonosor mientras vivía con las bestias?", o: ["Como plumas de águila", "Como la lana de las ovejas", "Como la melena de un león", "Como la hierba del campo"], v: "4:33" },
     { t: "m", q: "¿Qué pasó cuando Nabucodonosor alzó sus ojos al cielo al fin del tiempo?", o: ["Su razón le fue devuelta y bendijo al Altísimo", "Vio una mano que escribía en la pared", "Murió esa misma noche", "Vio cuatro hombres en el fuego"], v: "4:34" },
-    { t: "f", q: "«...y él puede humillar a los que andan con ________.»", a: ["soberbia"], v: "4:37" }
+    { t: "f", q: "«...y él puede humillar a los que andan con ________.»", a: ["soberbia"], v: "4:37" },
+    { t: "m", q: "¿Qué efecto tuvo el sueño en Nabucodonosor?", o: ["Lo espantó y las visiones de su cabeza lo turbaron", "Lo llenó de alegría", "Lo hizo dormir tranquilo", "Lo hizo olvidar su reino"], v: "4:5" },
+    { t: "f", q: "Nabucodonosor llamó a Daniel: «Beltsasar, jefe de los ________.»", a: ["magos"], v: "4:9" },
+    { t: "m", q: "¿Cómo eran el follaje y el fruto del árbol del sueño?", o: ["Su follaje era hermoso, su fruto abundante y había en él alimento para todos", "Seco y sin fruto", "Con fruto amargo", "Con hojas de oro y plata"], v: "4:12" },
+    { t: "m", q: "Según la sentencia del vigilante, ¿qué pasaría con el corazón de hombre?", o: ["Sería cambiado y le sería dado corazón de bestia", "Sería hecho de piedra", "Sería lleno de sabiduría", "Sería quitado para siempre"], v: "4:16" },
+    { t: "f", q: "Aún estaba la palabra en la boca del rey, cuando vino una ________ del cielo.", a: ["voz"], v: "4:31" }
   ]},
   { n: 5, title: "La escritura en la pared", q: [
     { t: "m", q: "¿A cuántos de sus príncipes invitó Belsasar al gran banquete?", o: ["A mil", "A cien", "A ciento veinte", "A quinientos"], v: "5:1" },
@@ -345,7 +428,12 @@ const CHAPTERS = [
     { t: "m", q: "¿Qué significa «Peres»?", o: ["Tu reino ha sido roto y dado a los medos y a los persas", "Contó Dios tu reino", "Pesado has sido en balanza", "Tu reino será restaurado"], v: "5:28" },
     { t: "f", q: "«Pesado has sido en ________ y hallado falto.»", a: ["balanza"], v: "5:27" },
     { t: "m", q: "¿Qué le pasó a Belsasar esa misma noche?", o: ["Fue muerto", "Se arrepintió", "Huyó a Media", "Fue echado al foso de los leones"], v: "5:30" },
-    { t: "m", q: "¿Quién tomó el reino y a qué edad?", o: ["Darío, de Media, a los sesenta y dos años", "Ciro, el persa, a los cuarenta años", "Darío, de Persia, a los setenta años", "Nabucodonosor, a los sesenta años"], v: "5:31" }
+    { t: "m", q: "¿Quién tomó el reino y a qué edad?", o: ["Darío, de Media, a los sesenta y dos años", "Ciro, el persa, a los cuarenta años", "Darío, de Persia, a los setenta años", "Nabucodonosor, a los sesenta años"], v: "5:31" },
+    { t: "m", q: "¿Pudieron los sabios del rey leer la escritura de la pared?", o: ["No pudieron leerla ni dar su interpretación", "La leyeron pero no la entendieron", "Sí, y la interpretaron", "Solo uno de ellos la leyó"], v: "5:8" },
+    { t: "f", q: "La reina dijo: «En tu reino hay un hombre en el que mora el espíritu de los dioses ________.»", a: ["santos"], v: "5:11" },
+    { t: "m", q: "Según la reina, ¿qué nombre le había puesto el rey a Daniel?", o: ["Beltsasar", "Belsasar", "Sadrac", "Abed-nego"], v: "5:12" },
+    { t: "m", q: "Según Daniel, ¿cómo eran los dioses a los que Belsasar dio alabanza?", o: ["Dioses que ni ven ni oyen ni saben", "Dioses poderosos de Media", "Dioses que revelan misterios", "Dioses del cielo"], v: "5:23" },
+    { t: "m", q: "¿Qué hizo Belsasar con Daniel después de la interpretación?", o: ["Lo vistió de púrpura, le puso un collar de oro y lo proclamó tercer señor del reino", "Lo echó del palacio", "Lo mandó al foso de los leones", "Lo hizo rey de Babilonia"], v: "5:29" }
   ]},
   { n: 6, title: "Daniel en el foso de los leones", q: [
     { t: "m", q: "¿Cuántos sátrapas constituyó Darío sobre el reino?", o: ["Ciento veinte", "Mil", "Sesenta", "Setenta"], v: "6:1" },
@@ -367,13 +455,22 @@ const CHAPTERS = [
     { t: "m", q: "¿Por qué no se halló ninguna lesión en Daniel?", o: ["Porque había confiado en su Dios", "Porque los leones estaban dormidos", "Porque el rey alimentó a los leones", "Porque el foso estaba vacío"], v: "6:23" },
     { t: "m", q: "¿Qué pasó con los hombres que habían acusado a Daniel?", o: ["Fueron echados al foso con sus hijos y sus mujeres, y los leones los despedazaron", "Fueron perdonados por el rey", "Fueron desterrados a Persia", "Fueron echados al horno de fuego"], v: "6:24" },
     { t: "m", q: "¿Qué ordenó el rey Darío en su decreto?", o: ["Que todos teman y tiemblen ante la presencia del Dios de Daniel", "Que nadie orara durante treinta días", "Que todos adoraran al rey", "Que Daniel volviera a Jerusalén"], v: "6:26" },
-    { t: "f", q: "Daniel prosperó durante los reinados de Darío y de ________, el persa.", a: ["Ciro"], v: "6:28" }
+    { t: "f", q: "Daniel prosperó durante los reinados de Darío y de ________, el persa.", a: ["Ciro"], v: "6:28" },
+    { t: "m", q: "¿Qué dijeron los acusadores de Daniel delante del rey?", o: ["Que no respetaba al rey ni acataba el edicto, sino que tres veces al día hacía su petición", "Que Daniel quería ser rey", "Que Daniel había robado del tesoro", "Que Daniel había huido a Jerusalén"], v: "6:13" },
+    { t: "f", q: "Al acercarse al foso, el rey llamó a gritos a Daniel con voz ________.", a: ["triste"], v: "6:20" },
+    { t: "m", q: "¿Qué fue lo primero que respondió Daniel al rey desde el foso?", o: ["¡Rey, vive para siempre!", "¡Sácame de aquí!", "Mi Dios me ha abandonado", "No he dormido en toda la noche"], v: "6:21" },
+    { t: "f", q: "Daniel dijo: «...porque ante él fui hallado ________.»", a: ["inocente"], v: "6:22" },
+    { t: "f", q: "«Él salva y libra, y hace señales y maravillas en el cielo y en la ________.»", a: ["tierra"], v: "6:27" }
   ]}
 ];
 
 // ---------- Lógica ----------
-const state = CHAPTERS.map(() => ({ graded: false, score: null }));
-let current = 0;
+const ALL = [];
+CHAPTERS.forEach(ch => ch.q.forEach(q => ALL.push(Object.assign({ c: ch.n }, q))));
+const TOTAL = ALL.length;
+let exam = [];      // preguntas revueltas
+let answered = 0, correct = 0;
+let perCh = {};
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -384,121 +481,114 @@ function shuffle(arr) {
   return a;
 }
 function norm(s) {
-  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9ñ]/g, "");
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 function esc(s) {
   return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 }
 
-// Orden barajado de opciones, fijo durante la sesión hasta reiniciar
-const orders = CHAPTERS.map(ch => ch.q.map(q => q.t === "m" ? shuffle(q.o.map((_, i) => i)) : null));
-
-function renderTabs() {
-  const tabs = document.getElementById("tabs");
-  tabs.innerHTML = CHAPTERS.map((ch, i) => {
-    const s = state[i];
-    const badge = s.graded ? `<span class="badge">${s.score}/20</span>` : "";
-    return `<button class="tab ${i === current ? "active" : ""}" data-i="${i}">Cap. ${ch.n}${badge}</button>`;
-  }).join("");
-  tabs.querySelectorAll(".tab").forEach(b => b.onclick = () => { current = +b.dataset.i; render(); window.scrollTo(0, 0); });
+function updateStatus() {
+  document.getElementById("count").textContent = `${answered} / ${TOTAL}`;
+  document.getElementById("right").textContent = correct;
+  document.getElementById("wrongc").textContent = answered - correct;
+  document.getElementById("bar").style.width = (answered / TOTAL * 100) + "%";
+  if (answered === TOTAL) showFinal();
 }
 
-function render() {
-  renderTabs();
-  const ch = CHAPTERS[current];
-  const ci = current;
-  const html = ch.q.map((q, qi) => {
-    const name = `c${ci}q${qi}`;
+function showFinal() {
+  const pct = Math.round(correct / TOTAL * 100);
+  const msg = pct === 100 ? "¡Excelente, perfecto!" : pct >= 80 ? "¡Muy bien!" : pct >= 60 ? "Bien, pero repasa los versículos marcados." : "Sigue estudiando, ¡tú puedes!";
+  const rows = CHAPTERS.map(ch => {
+    const r = perCh[ch.n];
+    return `<li>Daniel ${ch.n}: <b>${r.ok} / ${r.total}</b></li>`;
+  }).join("");
+  const el = document.getElementById("final");
+  el.className = "score show";
+  el.innerHTML = `Resultado final: <strong>${correct} / ${TOTAL}</strong> (${pct}%)<br>${msg}<ul class="by-ch">${rows}</ul>`;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function lock(box, q, right, given) {
+  answered++;
+  perCh[q.c].total++;
+  if (right) { correct++; perCh[q.c].ok++; }
+  box.classList.add(right ? "correct" : "wrong");
+  box.querySelectorAll("input, button").forEach(el => el.disabled = true);
+  const fb = box.querySelector(".feedback");
+  const correctText = q.t === "m" ? q.o[0] : q.a[0];
+  if (right) {
+    fb.className = "feedback show ok";
+    fb.innerHTML = `<div class="label">✓ ¡Correcto!</div>
+      <div class="verse"><b>Daniel ${q.v}</b> — ${esc(V[q.v] || "")}</div>`;
+  } else {
+    fb.className = "feedback show bad";
+    fb.innerHTML = `<div class="label">✗ Incorrecto</div>
+      <div>Tu respuesta: ${esc(given)}</div>
+      <div><b>Respuesta correcta:</b> ${esc(correctText)}</div>
+      <div class="verse"><b>Daniel ${q.v}</b> — ${esc(V[q.v] || "")}</div>`;
+  }
+  updateStatus();
+}
+
+function newExam() {
+  exam = shuffle(ALL).map(q => q.t === "m" ? Object.assign({ ord: shuffle(q.o.map((_, i) => i)) }, q) : q);
+  answered = 0; correct = 0;
+  perCh = {};
+  CHAPTERS.forEach(ch => perCh[ch.n] = { ok: 0, total: 0 });
+  document.getElementById("final").className = "score";
+
+  document.getElementById("app").innerHTML = exam.map((q, qi) => {
     let body;
     if (q.t === "m") {
-      body = `<div class="options">` + orders[ci][qi].map(oi =>
-        `<label class="opt" data-oi="${oi}"><input type="radio" name="${name}" value="${oi}"><span>${esc(q.o[oi])}</span></label>`
+      body = `<div class="options">` + q.ord.map(oi =>
+        `<label class="opt" data-oi="${oi}"><input type="radio" name="q${qi}" value="${oi}"><span>${esc(q.o[oi])}</span></label>`
       ).join("") + `</div>`;
     } else {
-      body = `<input class="fill" type="text" name="${name}" autocomplete="off" placeholder="Escribe tu respuesta...">`;
+      body = `<div class="fill-row">
+        <input class="fill" type="text" autocomplete="off" placeholder="Escribe tu respuesta...">
+        <button class="btn small" type="button">Responder</button></div>`;
     }
-    return `<div class="q" id="${name}">
+    return `<div class="q" data-qi="${qi}">
       <div class="q-head"><span class="q-num">${qi + 1}</span>
-        <div><div class="q-type">${q.t === "m" ? "Opción múltiple" : "Completar"}</div>
+        <div><div class="q-type">${q.t === "m" ? "Opción múltiple" : "Completar"} · Daniel ${q.c}</div>
         <div class="q-text">${esc(q.q)}</div></div></div>
       ${body}
       <div class="feedback"></div>
     </div>`;
   }).join("");
 
-  document.getElementById("app").innerHTML = `
-    <h2 class="chapter-title">Daniel ${ch.n}: ${esc(ch.title)}</h2>
-    <p class="chapter-sub">Responde las 20 preguntas y presiona «Calificar».</p>
-    <div class="score" id="score"></div>
-    ${html}
-    <div class="actions">
-      <button class="btn" id="grade">Calificar</button>
-      <button class="btn secondary" id="reset">Reiniciar capítulo</button>
-      ${current < CHAPTERS.length - 1 ? `<button class="btn secondary" id="next">Siguiente capítulo →</button>` : ""}
-    </div>`;
-
-  document.getElementById("grade").onclick = grade;
-  document.getElementById("reset").onclick = reset;
-  const next = document.getElementById("next");
-  if (next) next.onclick = () => { current++; render(); window.scrollTo(0, 0); };
-}
-
-function grade() {
-  const ci = current, ch = CHAPTERS[ci];
-  let ok = 0;
-  ch.q.forEach((q, qi) => {
-    const box = document.getElementById(`c${ci}q${qi}`);
-    const fb = box.querySelector(".feedback");
-    let right, given, correctText;
+  document.querySelectorAll(".q").forEach(box => {
+    const q = exam[+box.dataset.qi];
     if (q.t === "m") {
-      const sel = box.querySelector("input:checked");
-      given = sel ? q.o[+sel.value] : null;
-      right = sel && +sel.value === 0;
-      correctText = q.o[0];
-      box.querySelectorAll(".opt").forEach(l => {
-        l.classList.remove("is-correct", "is-wrong");
-        if (+l.dataset.oi === 0) l.classList.add("is-correct");
-        else if (sel && l.contains(sel)) l.classList.add("is-wrong");
-      });
+      box.querySelectorAll("input[type=radio]").forEach(r => r.addEventListener("change", () => {
+        if (box.classList.contains("correct") || box.classList.contains("wrong")) return;
+        const oi = +r.value;
+        box.querySelectorAll(".opt").forEach(l => {
+          if (+l.dataset.oi === 0) l.classList.add("is-correct");
+          else if (+l.dataset.oi === oi) l.classList.add("is-wrong");
+        });
+        lock(box, q, oi === 0, q.o[oi]);
+      }));
     } else {
-      const val = box.querySelector(".fill").value.trim();
-      given = val || null;
-      right = !!val && q.a.some(a => norm(a) === norm(val));
-      correctText = q.a[0];
-    }
-    box.classList.toggle("correct", !!right);
-    box.classList.toggle("wrong", !right);
-    if (right) {
-      ok++;
-      fb.className = "feedback show ok";
-      fb.innerHTML = "✓ ¡Correcto!";
-    } else {
-      fb.className = "feedback show bad";
-      fb.innerHTML = `<div class="label">✗ Incorrecto${given ? "" : " (sin responder)"}</div>
-        ${given ? `<div>Tu respuesta: ${esc(given)}</div>` : ""}
-        <div><b>Respuesta correcta:</b> ${esc(correctText)}</div>
-        <div class="verse"><b>Daniel ${q.v}</b> — ${esc(V[q.v] || "")}</div>`;
+      const input = box.querySelector(".fill");
+      const btn = box.querySelector("button");
+      const submit = () => {
+        const val = input.value.trim();
+        if (!val) { input.focus(); input.classList.add("shake"); setTimeout(() => input.classList.remove("shake"), 400); return; }
+        lock(box, q, q.a.some(a => norm(a) === norm(val)), val);
+      };
+      btn.addEventListener("click", submit);
+      input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
     }
   });
-  state[ci] = { graded: true, score: ok };
-  const sc = document.getElementById("score");
-  const pct = Math.round(ok / ch.q.length * 100);
-  const msg = pct === 100 ? "¡Excelente, perfecto!" : pct >= 80 ? "¡Muy bien!" : pct >= 60 ? "Bien, pero repasa los versículos marcados." : "Sigue estudiando, ¡tú puedes!";
-  sc.className = "score show";
-  sc.innerHTML = `Resultado: <strong>${ok} / ${ch.q.length}</strong> (${pct}%)<br>${msg}`;
-  renderTabs();
-  sc.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
-function reset() {
-  const ci = current;
-  orders[ci] = CHAPTERS[ci].q.map(q => q.t === "m" ? shuffle(q.o.map((_, i) => i)) : null);
-  state[ci] = { graded: false, score: null };
-  render();
+  updateStatus();
   window.scrollTo(0, 0);
 }
 
-render();
+document.getElementById("restart").onclick = () => {
+  if (answered === 0 || confirm("¿Empezar un examen nuevo? Se perderán tus respuestas actuales.")) newExam();
+};
+newExam();
 </script>
 </body>
 </html>
