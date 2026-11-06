@@ -2327,7 +2327,7 @@ function ccHuellaSync(s){
      sin id (abonos a capital) se unen si los dos solo agregaron al final.
    - Si los dos cambiaron el mismo campo de otra forma, no se puede unir solo. */
 const CC_CAMPOS_ACUMULADOS = new Set(["saldo","interesPagado","interesAcumuladoNoPagado","cuotasPagadas","ahorrado","interesGenerado"]);
-const CC_CAMPOS_DERIVADOS = new Set(["activo","pago","fechaPagada","fechaUltimoCalculo"]);
+const CC_CAMPOS_DERIVADOS = new Set(["activo","pago","fechaPagada","fechaUltimoCalculo","ultimoAbono"]);
 function ccUnirValor3(b, l, c, campo){
   const J = ccJSONEstable;
   if(J(l) === J(c)) return { ok:true, v:l };
@@ -2338,7 +2338,7 @@ function ccUnirValor3(b, l, c, campo){
   }
   if(campo && CC_CAMPOS_DERIVADOS.has(campo)){
     // Se recalculan después de unir; mientras tanto se deja el más reciente/no vacío.
-    if(campo === "fechaUltimoCalculo") return { ok:true, v: String(l||"") > String(c||"") ? l : c };
+    if(campo === "fechaUltimoCalculo" || campo === "ultimoAbono") return { ok:true, v: String(l||"") > String(c||"") ? l : c };
     return { ok:true, v: (c !== undefined && c !== null) ? c : l };
   }
   if(Array.isArray(l) && Array.isArray(c)){
@@ -7673,6 +7673,7 @@ function confirmarAbonoMeta(id){
   const monto = numFromMasked("abonoMetaInput_"+id);
   if(monto<=0){ toast("Ingresa un monto mayor a cero."); return; }
   m.ahorrado += monto;
+  m.ultimoAbono = fechaLocalHoy();   // para el recordatorio del aporte del mes
   abonandoMetaId = null;
   saveState();
   renderAhorros();
@@ -9289,6 +9290,103 @@ function ccAyudaDespues(){
   ccCerrarModalAyuda();
   toast("Si necesitas ayuda, en Configuración puedes escribirnos 💬");
 }
+/* ===== Recordatorio del aporte del mes (fondo de emergencia y metas) =====
+   Sale dentro de la app, desde las 12 m., el PRIMER día del mes en que la
+   persona abre la app y el día siguiente (una sola vez por mes). No sale si
+   ese mes ya se aportó, si el fondo/meta ya está completo, si no tiene aporte
+   mensual, o si la persona no tiene permiso de editar. Cada celular lleva su
+   propia cuenta (cc_aviso_ahorro). */
+const CC_CLAVE_AVISO_AHORRO = "cc_aviso_ahorro";
+function ccIsoDe(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+function ccDiaSiguienteIso(iso){ const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate()+1); return ccIsoDe(d); }
+function ccAportesPendientesMes(){
+  const mes = fechaLocalHoy().slice(0,7);
+  const out = [];
+  const fe = state.fondoEmergencia || {};
+  const objFE = totalPresupuestado() * (fe.meses||0);
+  if((fe.aporteMensual||0) > 0 && objFE > 0 && (fe.ahorrado||0) < objFE){
+    const aporto = (fe.historial||[]).some(h=> String(h.fecha||"").slice(0,7) === mes);
+    if(!aporto) out.push({ tipo:"fondo", id:"fondo", nombre:"Fondo de emergencia", icono:"🛟", aporte: fe.aporteMensual, ahorrado: fe.ahorrado||0, objetivo: objFE });
+  }
+  (state.metas||[]).forEach(m=>{
+    if((m.aporteMensual||0) <= 0 || (m.objetivo||0) <= 0 || (m.ahorrado||0) >= m.objetivo) return;
+    if(String(m.ultimoAbono||"").slice(0,7) === mes) return;
+    out.push({ tipo:"meta", id:m.id, nombre:m.nombre, icono:"🎯", aporte:m.aporteMensual, ahorrado:m.ahorrado||0, objetivo:m.objetivo });
+  });
+  return out;
+}
+function ccLeerAvisoAhorro(){ try{ return JSON.parse(localStorage.getItem(CC_CLAVE_AVISO_AHORRO) || "null"); }catch(e){ return null; } }
+// "primero" / "segundo" si hoy toca mostrarlo, false si no.
+function ccTocaAvisoAhorro(){
+  if(window.ccPuedeEditar === false) return false;
+  if(new Date().getHours() < 12) return false;
+  const hoy = fechaLocalHoy();
+  const reg = ccLeerAvisoAhorro();
+  if(!reg || reg.mes !== hoy.slice(0,7) || !Array.isArray(reg.dias) || !reg.dias.length) return "primero";
+  if(reg.dias.includes(hoy)) return false;
+  if(reg.dias.length === 1 && ccDiaSiguienteIso(reg.dias[0]) === hoy) return "segundo";
+  return false;
+}
+function ccHayVentanaAbierta(){
+  return ["ccLock","ccWelcome","ccTerminos","ccAyuda","ccConfirmModal","ccCodigoAccesoModal","ccAvisoAhorro"].some(id=>{
+    const el = document.getElementById(id);
+    return el && el.style.display !== "none" && getComputedStyle(el).display !== "none";
+  }) || !!document.getElementById("ccModalDiferencias") || !!document.getElementById("modalAbonoCapital");
+}
+function ccMostrarAvisoAhorro(){
+  const toca = ccTocaAvisoAhorro();
+  if(!toca) return false;
+  const items = ccAportesPendientesMes();
+  if(!items.length || ccHayVentanaAbierta()) return false;
+  const hoy = fechaLocalHoy();
+  const reg = (toca === "primero") ? { mes: hoy.slice(0,7), dias: [hoy] } : Object.assign(ccLeerAvisoAhorro(), {});
+  if(toca === "segundo") reg.dias.push(hoy);
+  try{ localStorage.setItem(CC_CLAVE_AVISO_AHORRO, JSON.stringify(reg)); }catch(e){}
+  const filas = items.map(it=> `
+      <div style="text-align:left; padding:10px 12px; background:var(--surface-2); border-radius:12px; margin-bottom:8px;">
+        <div style="font-weight:800; font-size:14px;">${it.icono} ${esc(it.nombre)}</div>
+        <div style="font-size:12.5px; color:var(--ink-soft); margin:3px 0 8px;">Aporte del mes: <b style="color:var(--ink);">${money(it.aporte)}</b> · llevas ${money(it.ahorrado)} de ${money(it.objetivo)}</div>
+        <button type="button" onclick="ccIrARegistrarAporte('${it.tipo}','${escJs(it.id)}')" style="width:100%; background:var(--brand-dark); color:#fff; border:none; border-radius:10px; padding:10px; font-weight:800; cursor:pointer;">Registrar aporte</button>
+      </div>`).join("");
+  const ov = document.createElement("div");
+  ov.id = "ccAvisoAhorro";
+  ov.style.cssText = "position:fixed; inset:0; z-index:9995; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:24px;";
+  ov.innerHTML = `
+    <div style="background:var(--surface); border-radius:20px; padding:22px 20px; max-width:360px; width:100%; max-height:calc(100vh - 48px); overflow-y:auto; text-align:center; box-shadow:0 20px 50px rgba(0,0,0,.3);">
+      <div style="font-size:40px; margin-bottom:6px;">💰</div>
+      <div style="font-size:17px; font-weight:800; color:var(--brand-dark); margin-bottom:6px;">Aporte del mes a tus ahorros</div>
+      <div style="font-size:13px; color:var(--ink); line-height:1.5; margin-bottom:14px;">Todavía no registras el aporte de este mes. Si no aportas, la fecha en que completas tu ahorro se corre un mes.</div>
+      ${filas}
+      <button type="button" onclick="ccCerrarAvisoAhorro()" style="width:100%; margin-top:6px; background:var(--surface-2); color:var(--ink); border:none; border-radius:12px; padding:12px; font-weight:700; cursor:pointer;">Después</button>
+    </div>`;
+  document.body.appendChild(ov);
+  return true;
+}
+function ccCerrarAvisoAhorro(){ const el = document.getElementById("ccAvisoAhorro"); if(el) el.remove(); }
+function ccIrARegistrarAporte(tipo, id){
+  ccCerrarAvisoAhorro();
+  showView("ahorros");
+  setTimeout(()=>{
+    const cont = document.getElementById("views");
+    let el = null;
+    if(tipo === "fondo"){
+      verFondoEmergencia = true;
+      ccAplicarVisibilidadFondoEmergencia();
+      el = document.getElementById("feAporteMontoNuevo");
+      if(el && !el.value) setMasked(el, (state.fondoEmergencia||{}).aporteMensual || 0);
+    } else {
+      abonandoMetaId = id;
+      renderAhorros();
+      el = document.getElementById("abonoMetaInput_" + id);
+      const m = state.metas.find(x=> x.id === id);
+      if(el && m && !el.value) setMasked(el, m.aporteMensual || 0);
+    }
+    if(el && cont){ cont.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + cont.scrollTop - cont.clientHeight/2), behavior:"smooth" }); setTimeout(()=>{ try{ el.focus(); }catch(e){} }, 300); }
+  }, 150);
+}
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible") setTimeout(()=>{ if(!ccHayVentanaAbierta()) ccMostrarAvisoAhorro(); }, 800);
+});
 let ccAyudaMostrada = false;
 function ccMostrarAyudaSiListo(){
   if(ccAyudaMostrada) return;
@@ -9303,6 +9401,9 @@ function ccMostrarAyudaSiListo(){
     return;
   }
   ccAyudaMostrada = true;
+  // Si hoy toca el recordatorio del aporte del mes, sale ese y la ayuda queda
+  // para la próxima vez (nunca dos ventanas seguidas).
+  if(ccMostrarAvisoAhorro()) return;
   // Para no ser invasivo: sale solo la PRIMERA vez que se abre la app en la
   // mañana (antes de las 12 m.) y la primera vez en la tarde/noche.
   const ahora = new Date();
