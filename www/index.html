@@ -3342,12 +3342,35 @@ function aniosConDatos(){
    NAVEGACIÓN
    ===================================================================== */
 let ccVistaActual = "inicio";
+function ccCerrarEdicionesAlSalir(name){
+  try{
+    if(name !== "deudas"){ editingDeudaId = null; abonandoDeudaId = null; }
+    if(name !== "gastos"){
+      editingGastoId = null;
+      if(verPagoDeudas) toggleVerPagoDeudas();
+      if(verGastosFijos) toggleVerGastosFijos();
+      pagandoMovimientoId = null; verMovEspecifico = null;
+    }
+    if(name !== "ahorros"){ editingMetaId = null; abonandoMetaId = null; }
+    if(name !== "presupuesto"){
+      editingIngresoId = null; editingRubroIdx = null; editandoPrincipal = false;
+      ["addIngresoPanel","addRubroPanel"].forEach(id=>{ const p = document.getElementById(id); if(p) p.style.display = "none"; });
+    }
+    if(name !== "ajustes"){
+      alarmaAbiertaId = null;
+      if(verAlarmasDeuda) toggleVerAlarmasDeuda();
+    }
+  }catch(e){ console.warn("ccCerrarEdicionesAlSalir", e); }
+}
 function showView(name){
   if(typeof ccRevisarDiaFormGasto === "function") ccRevisarDiaFormGasto();
   if(name === "gastos" && ccVistaActual !== "gastos" && typeof ccFechaGastoAHoy === "function") ccFechaGastoAHoy();
   // Si sales de Deudas, los formularios de "Nueva deuda"/"Agregar a existente" se
   // cierran solos — así no quedan desplegados la próxima vez que entres a la pestaña.
   if(name !== "deudas" && typeof ccCerrarFormulariosDeuda === "function") ccCerrarFormulariosDeuda();
+  // Igual con los paneles de editar / abonar: al cambiar de pestaña se cierran
+  // (sin guardar), para que no queden abiertos al volver.
+  ccCerrarEdicionesAlSalir(name);
   // Lo mismo para el Fondo de emergencia en Ahorros.
   if(name !== "ahorros" && typeof verFondoEmergencia !== "undefined" && verFondoEmergencia){
     verFondoEmergencia = false;
