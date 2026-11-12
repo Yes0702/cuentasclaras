@@ -387,6 +387,9 @@
   .r-edit:active{ background:var(--brand-soft); }
   .grupo-ing{ background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
   .grupo-ing-head{ display:flex; justify-content:space-between; align-items:center; cursor:pointer; gap:10px; }
+  /* El recuadro del fondo de emergencia siempre es verde claro: sus letras van oscuras también en modo oscuro. */
+  #feCard label, #feCard .hint, #feCard .bar-label, #feCard .bar-label span{ color:#17382B !important; opacity:1 !important; }
+  #feCard .hint b{ color:#0B3D2C; }
   .grupo-ing-head .s-txt{ font-size:14px; font-weight:700; }
   .grupo-ing-head .s-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:1px; }
   .grupo-ing .chev{ color:var(--ink-mute); font-size:11px; }
@@ -1073,15 +1076,20 @@
 
         <div id="bloqueDeudaNormal">
         <div class="field-row">
-          <div><label>Deuda inicial</label><input type="text" inputmode="numeric" id="dInicial" class="mono-input" placeholder="0"></div>
-          <div><label>Saldo actual</label><input type="text" inputmode="numeric" id="dSaldo" class="mono-input" placeholder="0"></div>
+          <div><label>Deuda inicial</label><input type="text" inputmode="numeric" id="dInicial" class="mono-input" oninput="ccCalcPagoDeuda('saldo')" placeholder="0"></div>
+          <div><label>Saldo actual</label><input type="text" inputmode="numeric" id="dSaldo" class="mono-input" oninput="ccCalcPagoDeuda('saldo')" placeholder="0"></div>
         </div>
 
         <div class="cc-seccion">Información de pago</div>
-        <label>💰 Pago mensual</label>
-        <input type="text" inputmode="numeric" id="dPago" class="mono-input" placeholder="0">
         <label>% de interés anual que te cobran (opcional)</label>
-        <input type="text" inputmode="decimal" id="dTasa" class="mono-input" placeholder="Ej: 24">
+        <input type="text" inputmode="decimal" id="dTasa" class="mono-input" placeholder="Ej: 24" oninput="ccCalcPagoDeuda('tasa')">
+        <div class="field-row">
+          <div><label>¿A cuántas cuotas?</label><input type="number" min="1" id="dMeses" class="mono-input" placeholder="Ej: 12" oninput="ccCalcPagoDeuda('cuotas')"></div>
+          <div><label>📅 Fecha final (opcional)</label><input type="date" id="dFecha" onchange="ccCalcPagoDeuda('fecha')"></div>
+        </div>
+        <label>💰 Pago mensual</label>
+        <input type="text" inputmode="numeric" id="dPago" class="mono-input" placeholder="0" oninput="ccCalcPagoDeuda('pago')">
+        <div class="hint" id="deudaPagoHint" style="margin-top:6px;"></div>
         </div>
 
         <div id="bloqueDeudaAvance" style="display:none;">
@@ -1118,16 +1126,6 @@
         </select>
         <div class="hint" style="margin-top:4px;">Si el mes es más corto (febrero, etc.), te avisaremos el último día disponible.</div>
 
-        <button type="button" class="cc-colapsable" style="margin-top:16px;" onclick="ccToggleColapsable('dObjetivoBody','dObjetivoChev')">
-          <span>🎯 Objetivo de pago (opcional)</span><span id="dObjetivoChev">▾</span>
-        </button>
-        <div id="dObjetivoBody" style="display:none; padding-top:2px;">
-          <label>Fecha objetivo de pago (opcional)</label>
-          <input type="date" id="dFecha" onchange="onFechaDeudaChange()">
-          <label>O meses para pagarla (opcional, calcula el pago sugerido)</label>
-          <input type="number" min="1" id="dMeses" class="mono-input" placeholder="Ej: 6" oninput="onMesesDeudaInput()">
-          <div class="hint" id="deudaPagoHint"></div>
-        </div>
 
         <button class="btn-primary" onclick="addDeuda()">Agregar deuda</button>
       </div>
@@ -1254,7 +1252,7 @@
     <!-- ================= AHORROS ================= -->
     <section class="view" id="view-ahorros">
       <div id="ahorroDisponibleBox"></div>
-      <div class="card" style="margin-top:0; background:linear-gradient(135deg,#D7F2E5,#BFE9D2); border:1px solid #8FDABF;">
+      <div class="card" id="feCard" style="margin-top:0; background:linear-gradient(135deg,#D7F2E5,#BFE9D2); border:1px solid #8FDABF;">
         <div class="grupo-ing-head" onclick="toggleVerFondoEmergencia()" style="cursor:pointer; align-items:center;">
           <div style="display:flex; align-items:center; gap:12px;">
             <div style="font-size:36px; line-height:1; flex:0 0 auto;">👆</div>
@@ -2334,7 +2332,7 @@ function ccHuellaSync(s){
      sin id (abonos a capital) se unen si los dos solo agregaron al final.
    - Si los dos cambiaron el mismo campo de otra forma, no se puede unir solo. */
 const CC_CAMPOS_ACUMULADOS = new Set(["saldo","interesPagado","interesAcumuladoNoPagado","cuotasPagadas","ahorrado","interesGenerado"]);
-const CC_CAMPOS_DERIVADOS = new Set(["activo","pago","fechaPagada","fechaUltimoCalculo","ultimoAbono","cumplidaEn"]);
+const CC_CAMPOS_DERIVADOS = new Set(["activo","pago","fechaPagada","fechaUltimoCalculo","ultimoAbono","cumplidaEn","interesDesde"]);
 function ccUnirValor3(b, l, c, campo){
   const J = ccJSONEstable;
   if(J(l) === J(c)) return { ok:true, v:l };
@@ -2345,7 +2343,7 @@ function ccUnirValor3(b, l, c, campo){
   }
   if(campo && CC_CAMPOS_DERIVADOS.has(campo)){
     // Se recalculan después de unir; mientras tanto se deja el más reciente/no vacío.
-    if(campo === "fechaUltimoCalculo" || campo === "ultimoAbono") return { ok:true, v: String(l||"") > String(c||"") ? l : c };
+    if(campo === "fechaUltimoCalculo" || campo === "ultimoAbono" || campo === "interesDesde") return { ok:true, v: String(l||"") > String(c||"") ? l : c };
     if(campo === "cumplidaEn") return { ok:true, v: (l && c) ? (String(l) < String(c) ? l : c) : (l || c) };
     return { ok:true, v: (c !== undefined && c !== null) ? c : l };
   }
@@ -2651,6 +2649,8 @@ function hidratar(parsed, base){
   ccReenlazarPagosDeDeuda(s.gastos, s.deudas);
   ccMigrarAbonosCapital(s);
   s.fondoEmergencia = Object.assign({meses:3, ahorrado:0, aporteMensual:0, tasaAnual:0, historial:[]}, s.fondoEmergencia||{});
+  ccAplicarRendimientos(s.fondoEmergencia, "ahorrado");
+  (s.metas||[]).forEach(m=> ccAplicarRendimientos(m, "ahorrado"));
   s.fondoEmergencia.historial = Array.isArray(s.fondoEmergencia.historial) ? s.fondoEmergencia.historial : [];
   s.inversiones = Array.isArray(s.inversiones) ? s.inversiones : [];
   s.alarmas = Array.isArray(s.alarmas) && s.alarmas.length
@@ -2958,6 +2958,32 @@ function ccSaldoArrastradoAntesDe(mes, anio){
 }
 function totalDeuda(){ return state.deudas.reduce((s,d)=> s + Math.max(0,d.saldo), 0); }
 function totalAhorradoMetas(){ return state.metas.reduce((s,m)=> s + m.ahorrado, 0); }
+/* ---- Rendimientos mes a mes ----
+   Si el fondo de emergencia o una meta tiene % de interés, al empezar cada mes
+   se le suma lo que rinde lo ahorrado (tasa anual / 12). Empieza a contar desde
+   el mes en que se pone el %: nunca se calcula hacia atrás. interesDesde = el
+   último mes ya sumado; interesGenerado = total sumado hasta hoy. Como sale
+   igual en todos los celulares, al unirlos no se cuenta dos veces. */
+function ccMesClaveDe(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
+function ccAplicarRendimientos(obj, campo){
+  if(!obj) return;
+  const tasa = Number(obj.tasaAnual) || 0;
+  if(tasa <= 0){ if(obj.interesDesde) delete obj.interesDesde; return; }
+  const hoyMes = ccMesClaveDe(new Date());
+  if(!/^\d{4}-\d{2}$/.test(String(obj.interesDesde||""))){ obj.interesDesde = hoyMes; return; }
+  let [y, m] = obj.interesDesde.split("-").map(Number);
+  for(let i = 0; i < 600; i++){
+    if(m === 12){ y++; m = 1; } else m++;
+    const k = y + "-" + String(m).padStart(2,"0");
+    if(k > hoyMes) break;
+    const saldo = Number(obj[campo]) || 0;
+    const r = Math.round(saldo * tasa / 100 / 12);
+    obj[campo] = saldo + r;
+    obj.interesGenerado = (Number(obj.interesGenerado) || 0) + r;
+    obj.interesDesde = k;
+  }
+}
+function ccProximoMesLargo(){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+1); return MESES_LARGO[d.getMonth()] + " " + d.getFullYear(); }
 /* ---- Metas cumplidas ----
    Una meta cumplida (llegó a su objetivo) pasa al historial de "Metas
    cumplidas" y deja de pedir aporte. Queda cumplida aunque después se use su
@@ -6269,23 +6295,61 @@ async function exportXLSX(){
    ===================================================================== */
 let editingDeudaId = null;
 
-function onFechaDeudaChange(){
-  const meses = mesesHastaFecha(document.getElementById("dFecha").value);
-  if(meses>0) document.getElementById("dMeses").value = meses;
-  onMesesDeudaInput();
+/* Deuda nueva: el % de interés, las cuotas, la fecha final y el pago mensual
+   se calculan entre sí. Cuotas o fecha → se calcula el pago (cuota fija, con
+   el interés). Pago → se calculan las cuotas y la fecha en que terminas. */
+function ccCuotaFija(saldo, n, i){
+  if(!(n > 0) || !(saldo > 0)) return 0;
+  if(!(i > 0)) return Math.ceil(saldo / n);
+  return Math.ceil(saldo * i / (1 - Math.pow(1 + i, -n)));
 }
-function onMesesDeudaInput(){
-  const meses = parseInt(document.getElementById("dMeses").value)||0;
-  const saldo = numFromMasked("dSaldo") || numFromMasked("dInicial");
+function ccFechaEnMesesIso(n){
+  const d = new Date(); const dia = d.getDate();
+  d.setDate(1); d.setMonth(d.getMonth() + n);
+  d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()));
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function ccCalcPagoDeuda(origen){
+  const elM = document.getElementById("dMeses"), elF = document.getElementById("dFecha"), elP = document.getElementById("dPago");
   const hint = document.getElementById("deudaPagoHint");
-  if(meses>0 && saldo>0){
-    const pagoSugerido = Math.ceil(saldo/meses);
-    setMasked("dPago", pagoSugerido);
-    hint.textContent = `Pago sugerido: ${money(pagoSugerido)}/mes para terminar en ${meses} mes${meses===1?"":"es"}.`;
-  } else {
-    hint.textContent = "";
+  if(!elM || !elF || !elP || !hint) return;
+  const saldo = numFromMasked("dSaldo") || numFromMasked("dInicial");
+  const tasa = parseFloat(String(document.getElementById("dTasa").value||"").replace(",",".")) || 0;
+  const i = tasa / 100 / 12;
+  const fechaFinTxt = n => { const d = new Date(ccFechaEnMesesIso(n)+"T00:00:00"); return MESES_LARGO[d.getMonth()] + " " + d.getFullYear(); };
+  if(!(saldo > 0)){ hint.textContent = (origen==="cuotas"||origen==="fecha"||origen==="pago") ? "Escribe primero la deuda inicial o el saldo actual." : ""; return; }
+  if(origen === "fecha"){
+    // Meses del calendario hasta la fecha final (15 nov → 15 may = 6 cuotas)
+    const f = elF.value ? new Date(elF.value+"T00:00:00") : null;
+    const hoy = new Date(); hoy.setHours(0,0,0,0);
+    const n = (f && !isNaN(f) && f > hoy) ? Math.max(1, (f.getFullYear()-hoy.getFullYear())*12 + (f.getMonth()-hoy.getMonth())) : 0;
+    if(n > 0) elM.value = n;
   }
+  const n = parseInt(elM.value) || 0;
+  if((origen === "cuotas" || origen === "fecha" || origen === "tasa" || origen === "saldo") && n > 0){
+    const pago = ccCuotaFija(saldo, n, i);
+    setMasked(elP, pago);
+    if(origen !== "fecha") elF.value = ccFechaEnMesesIso(n);
+    hint.innerHTML = `<b>${n}</b> cuota${n===1?"":"s"} de <b>${money(pago)}</b>${i>0 ? " · pagarás ~" + money(Math.max(0, pago*n - saldo)) + " de interés" : ""} · terminas en ${fechaFinTxt(n)}.`;
+    return;
+  }
+  if(origen === "cuotas" || origen === "fecha"){ if(!(n > 0)) hint.textContent = ""; return; }
+  // Desde el pago mensual (o cambió el % / el saldo sin cuotas): se calculan las cuotas
+  const pago = numFromMasked(elP);
+  if(!(pago > 0)){ hint.textContent = ""; return; }
+  const nReal = ccMesesReal(saldo, pago, i);
+  if(!isFinite(nReal)){
+    elM.value = ""; elF.value = "";
+    hint.innerHTML = `⚠️ Con ${money(pago)} al mes la deuda no baja: no alcanza a cubrir el interés (~${money(Math.round(saldo*i))} al mes).`;
+    return;
+  }
+  const cuotas = Math.max(1, Math.ceil(nReal - 1e-9));
+  elM.value = cuotas;
+  elF.value = ccFechaEnMesesIso(cuotas);
+  hint.innerHTML = `Pagando <b>${money(pago)}</b> al mes: <b>${cuotas}</b> cuota${cuotas===1?"":"s"}${i>0 ? " · pagarás ~" + money(Math.max(0, Math.round(pago*nReal - saldo))) + " de interés" : ""} · terminas en ${fechaFinTxt(cuotas)}.`;
 }
+function onFechaDeudaChange(){ ccCalcPagoDeuda("fecha"); }
+function onMesesDeudaInput(){ ccCalcPagoDeuda("cuotas"); }
 
 /* ===== Helpers de fecha de corte (para saber en qué mes empieza a "contar" una compra) ===== */
 function fechaLocalHoy(){
@@ -7890,10 +7954,15 @@ function renderAhorrosLigero(){
         html += `<div style="margin-top:6px;">Con ${tasa}% anual compuesto: lo completas en <b>${mesesInteres} mes${mesesInteres===1?"":"es"}</b> (≈ ${fechaEnMeses(mesesInteres)})${ahorrados>0 ? `, <b>${ahorrados} mes${ahorrados===1?"":"es"} antes</b>` : ""}.</div>`;
       }
     }
-    hint.innerHTML = html;
+    hint.innerHTML = html + ccHtmlRendimientosFondo();
   } else {
-    hint.textContent = "";
+    hint.innerHTML = ccHtmlRendimientosFondo();
   }
+}
+function ccHtmlRendimientosFondo(){
+  const fe = state.fondoEmergencia || {};
+  if(!((fe.tasaAnual||0) > 0)) return "";
+  return `<div style="margin-top:8px;">📈 Rendimientos sumados: <b>${money(fe.interesGenerado||0)}</b>. Cada mes se suma lo que rinde lo ahorrado al ${fe.tasaAnual}% anual (el próximo, al empezar ${ccProximoMesLargo()}).</div>`;
 }
 
 function registrarAporteFondoEmergencia(){
@@ -8134,6 +8203,7 @@ function renderAhorros(){
           return `<div style="margin-bottom:10px; padding:9px 11px; background:var(--brand-soft); border:1px solid #BFE9DA; border-radius:10px;">
             <div class="hint" style="color:var(--brand-dark); font-weight:600; line-height:1.4;">
               💰 Con ${m.tasaAnual}% anual generarías <b>${money(c.rendimiento)}</b> en rendimientos (aprox.).
+              <br>📈 Ya sumados: <b>${money(m.interesGenerado||0)}</b> · cada mes se suma lo que rinde (el próximo, al empezar ${ccProximoMesLargo()}).
             </div>
           </div>`;
         })() : ""}
