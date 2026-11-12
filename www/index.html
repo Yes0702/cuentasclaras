@@ -375,6 +375,9 @@
   }
   .receipt .r-main{min-width:0; flex:1;}
   .receipt .r-rubro{font-size:13.5px; font-weight:700;}
+  .receipt.de-ahorro{ background:rgba(232,145,58,.13); border-color:rgba(232,145,58,.55); }
+  .receipt.de-ahorro .r-amount{ color:#D9822B; }
+  .receipt .r-ahorro{ font-size:11.5px; font-weight:700; color:#D9822B; margin-top:2px; }
   .receipt .r-meta{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
   .receipt .r-amount{font-family:var(--font-mono); font-weight:600; font-size:14.5px; white-space:nowrap; color:var(--money-out);}
   .r-edit{
@@ -951,6 +954,10 @@
         <div class="field-row">
           <div><label>Monto</label><input type="text" inputmode="numeric" id="gMonto" class="mono-input" placeholder="0"></div>
           <div><label>Nota (opcional)</label><input type="text" id="gNota" placeholder="Ej: compra semanal"></div>
+        </div>
+        <div id="gFuenteBox" style="display:none;">
+          <label>¿De dónde sale el dinero?</label>
+          <select id="gFuente" onchange="ccPintarFuenteGasto()"><option value="disponible">💵 Dinero disponible</option></select>
         </div>
         <button class="btn-primary" onclick="addGasto()">Agregar gasto</button>
       </div>
@@ -2327,7 +2334,7 @@ function ccHuellaSync(s){
      sin id (abonos a capital) se unen si los dos solo agregaron al final.
    - Si los dos cambiaron el mismo campo de otra forma, no se puede unir solo. */
 const CC_CAMPOS_ACUMULADOS = new Set(["saldo","interesPagado","interesAcumuladoNoPagado","cuotasPagadas","ahorrado","interesGenerado"]);
-const CC_CAMPOS_DERIVADOS = new Set(["activo","pago","fechaPagada","fechaUltimoCalculo","ultimoAbono"]);
+const CC_CAMPOS_DERIVADOS = new Set(["activo","pago","fechaPagada","fechaUltimoCalculo","ultimoAbono","cumplidaEn"]);
 function ccUnirValor3(b, l, c, campo){
   const J = ccJSONEstable;
   if(J(l) === J(c)) return { ok:true, v:l };
@@ -2339,6 +2346,7 @@ function ccUnirValor3(b, l, c, campo){
   if(campo && CC_CAMPOS_DERIVADOS.has(campo)){
     // Se recalculan después de unir; mientras tanto se deja el más reciente/no vacío.
     if(campo === "fechaUltimoCalculo" || campo === "ultimoAbono") return { ok:true, v: String(l||"") > String(c||"") ? l : c };
+    if(campo === "cumplidaEn") return { ok:true, v: (l && c) ? (String(l) < String(c) ? l : c) : (l || c) };
     return { ok:true, v: (c !== undefined && c !== null) ? c : l };
   }
   if(Array.isArray(l) && Array.isArray(c)){
@@ -2943,13 +2951,34 @@ function ccSaldoArrastradoAntesDe(mes, anio){
     m = ant.mes; a = ant.anio;
     const tieneGastos = state.gastos.some(g=>g.mes===m && g.anio===a);
     if(!tieneGastos) break;
-    saldo += ccIngresoDelMesHistorico(m, a) - totalRealMes(m, a);
+    saldo += ccIngresoDelMesHistorico(m, a) - (totalRealMes(m, a) - totalPagadoConAhorrosMes(m, a));
     huboAlMenosUnMes = true;
   }
   return huboAlMenosUnMes ? saldo : null;
 }
 function totalDeuda(){ return state.deudas.reduce((s,d)=> s + Math.max(0,d.saldo), 0); }
 function totalAhorradoMetas(){ return state.metas.reduce((s,m)=> s + m.ahorrado, 0); }
+/* ---- Metas cumplidas ----
+   Una meta cumplida (llegó a su objetivo) pasa al historial de "Metas
+   cumplidas" y deja de pedir aporte. Queda cumplida aunque después se use su
+   plata para pagar un gasto. */
+function ccMetaCumplida(m){ return !!(m && (m.cumplidaEn || (m.objetivo > 0 && (m.ahorrado||0) >= m.objetivo))); }
+function ccMarcarMetaCumplida(m){
+  if(m && !m.cumplidaEn && m.objetivo > 0 && (m.ahorrado||0) >= m.objetivo){ m.cumplidaEn = fechaLocalHoy(); return true; }
+  return false;
+}
+/* ---- Gastos pagados con ahorros (fondo de emergencia o una meta) ----
+   Cuentan en su rubro y en "Has pagado este mes", pero NO bajan el disponible
+   del mes: esa plata salió del ahorro, no del ingreso del mes. */
+function totalPagadoConAhorrosMes(mes, anio){
+  return state.gastos.filter(g => g.pagadoCon &&
+      (mes==="Todos" || g.mes===mes) && (anio==="Todos" || g.anio===anio)
+    ).reduce((s,g)=> s + (g.monto||0), 0);
+}
+function ccTextoPagadoCon(g){
+  if(!g || !g.pagadoCon) return "";
+  return g.pagadoCon === "fondo" ? "🛟 Pagado con el fondo de emergencia" : "🎯 Pagado con la meta " + (g.pagadoConNombre || "");
+}
 function totalObjetivoMetas(){ return state.metas.reduce((s,m)=> s + m.objetivo, 0); }
 /* ---- Exportar resumen a PDF (mes actual, año completo, o rango personalizado) ---- */
 function ccActualizarCamposPDF(){
@@ -3060,7 +3089,7 @@ async function ccGenerarPDFResumen(){
   // ---- Reunir datos del periodo ----
   // El ingreso principal se resuelve MES A MES (no con el valor "de hoy"), para que
   // un reporte de varios meses sea exacto aunque el ingreso haya cambiado entre ellos.
-  let ingresoTotal = 0, gastadoTotal = 0;
+  let ingresoTotal = 0, gastadoTotal = 0, conAhorrosTotal = 0;
   let totalQ1 = 0, totalQ2 = 0, totalMensual = 0, totalOcasional = 0;
   let huboQuincenal = false, huboMensual = false;
   const porRubro = {};  // nombre -> {presupuestado, gastado} — total COMPILADO del periodo completo
@@ -3087,16 +3116,17 @@ async function ccGenerarPDFResumen(){
       if(!porRubro[r.nombre]) porRubro[r.nombre] = { presupuestado:0, gastado:0 };
       porRubro[r.nombre].presupuestado += montoRubro(r);
     });
-    let gastadoMes = 0;
+    let gastadoMes = 0, conAhorrosMes = 0;
     const porRubroMes = {};
     state.gastos.filter(g=>g.mes===m && g.anio===a).forEach(g=>{
       gastadoTotal += g.monto;
       gastadoMes += g.monto;
+      if(g.pagadoCon){ conAhorrosTotal += g.monto; conAhorrosMes += g.monto; }
       if(!porRubro[g.rubro]) porRubro[g.rubro] = { presupuestado:0, gastado:0 };
       porRubro[g.rubro].gastado += g.monto;
       porRubroMes[g.rubro] = (porRubroMes[g.rubro]||0) + g.monto;
     });
-    detallePorMes.push({ mes:m, anio:a, ingreso:ingresoMes, gastado:gastadoMes, porRubroMes });
+    detallePorMes.push({ mes:m, anio:a, ingreso:ingresoMes, gastado:gastadoMes, conAhorros:conAhorrosMes, porRubroMes });
   });
 
   // ---- Armar el PDF ----
@@ -3140,7 +3170,7 @@ async function ccGenerarPDFResumen(){
 
   doc.setFont("helvetica","bold"); doc.setFontSize(12);
   doc.text("Gastado total: " + money(gastadoTotal), margen, y); y += 18;
-  const diferencia = ingresoTotal - gastadoTotal;
+  const diferencia = ingresoTotal - (gastadoTotal - conAhorrosTotal);
   doc.text((diferencia>=0 ? "Sobrante: " : "Faltante: ") + money(Math.abs(diferencia)), margen, y); y += 18;
   const pctGastado = ingresoTotal>0 ? (gastadoTotal/ingresoTotal*100) : 0;
   doc.text("% del ingreso gastado: " + pct(pctGastado), margen, y);
@@ -3188,7 +3218,7 @@ async function ccGenerarPDFResumen(){
 
     detallePorMes.forEach(dm=>{
       if(y > 670){ doc.addPage(); y = 50; }
-      const difMes = dm.ingreso - dm.gastado;
+      const difMes = dm.ingreso - (dm.gastado - (dm.conAhorros||0));
       doc.setFont("helvetica","bold"); doc.setFontSize(11);
       doc.text(dm.mes + " " + dm.anio, margen, y); y += 14;
       doc.setFont("helvetica","normal"); doc.setFontSize(9.5);
@@ -3382,12 +3412,19 @@ function renderTopbar(){
       arrastreEl.textContent = "↩︎ Traes del mes pasado: " + (saldoAnterior < 0 ? "−" : "+") + money(Math.abs(saldoAnterior));
     }
     if(extra){
-      const disponible = state.ingreso + (saldoAnterior||0) - gastadoMes;
+      const conAhorros = totalPagadoConAhorrosMes(state.mesActivo, state.anioActivo);
+      const disponible = state.ingreso + (saldoAnterior||0) - (gastadoMes - conAhorros);
       extra.style.display = "block";
       extra.style.fontSize = "13px";
       extra.style.fontWeight = "700";
       extra.style.color = disponible < 0 ? "#FFD3CE" : "rgba(255,255,255,.95)";
       extra.textContent = (disponible < 0 ? "Te pasaste por " : "Tienes disponible ") + money(Math.abs(disponible));
+      if(conAhorros > 0){
+        const nota = document.createElement("div");
+        nota.style.cssText = "font-size:11.5px; font-weight:600; color:#FFE2C2; margin-top:3px;";
+        nota.textContent = "🧡 " + money(conAhorros) + " de lo pagado salió de tus ahorros";
+        extra.appendChild(nota);
+      }
     }
   } else if(ccVistaActual === "ahorros"){
     lblEl.textContent = "Sigue invirtiendo";
@@ -3878,7 +3915,7 @@ function renderDashboard(){
   // arrastrando lo que sobró o faltó de meses anteriores (los pagos de deuda
   // comprometidos se ven aparte, en "Deuda pendiente").
   const saldoAnteriorDash = ccSaldoArrastradoAntesDe(state.mesActivo, state.anioActivo) || 0;
-  const restante = state.ingreso + saldoAnteriorDash - real;
+  const restante = state.ingreso + saldoAnteriorDash - (real - totalPagadoConAhorrosMes(state.mesActivo, state.anioActivo));
 
   document.getElementById("kpiPresu").textContent = money(presu + pagosDeuda); // incluye pagos de deuda del mes
   document.getElementById("kpiReal").textContent = money(real);
@@ -4525,6 +4562,10 @@ function renderPresupuesto(){
     totalRow.className = "group-total";
     totalRow.innerHTML = `<span>Subtotal ${t}</span><span data-group-subtotal="${t}">${money(groupMonto)}</span>`;
     box.appendChild(totalRow);
+    if(t==="Ahorro"){
+      const caja = ccCajaAhorrosDelMes(groupMonto);
+      if(caja) box.appendChild(caja);
+    }
   });
 
   cont.querySelectorAll(".cantInput").forEach(inp=>{
@@ -4880,8 +4921,75 @@ function fillMesAnioSelects(){
   fAnio.innerHTML = `<option value="Todos">Todos los años</option>` + anioOpts;
   if(!fAnio.dataset.filled){ fAnio.value = String(state.anioActivo); fAnio.dataset.filled = "1"; }
   else fAnio.value = prevFA || String(state.anioActivo);
+  ccLlenarFuenteGasto();
 }
 
+/* ===== ¿De dónde sale el dinero de un gasto? =====
+   "Dinero disponible" (del mes) siempre es lo que viene marcado. Si se elige
+   el fondo de emergencia o una meta, el gasto se resta de ahí. La elección se
+   mantiene mientras sigues en Gastos, y vuelve sola a "Dinero disponible" al
+   entrar a Gastos, al abrir la app y al cambiar el día (ver ccFechaGastoAHoy). */
+function ccLlenarFuenteGasto(){
+  const sel = document.getElementById("gFuente");
+  const box = document.getElementById("gFuenteBox");
+  if(!sel) return;
+  const previo = sel.value || "disponible";
+  const opts = [`<option value="disponible">💵 Dinero disponible</option>`];
+  const fe = state.fondoEmergencia || {};
+  if((fe.ahorrado||0) > 0) opts.push(`<option value="fondo">🛟 Fondo emergencia (${money(fe.ahorrado)})</option>`);
+  (state.metas||[]).forEach(m=>{
+    if((m.ahorrado||0) > 0) opts.push(`<option value="meta:${escJs(m.id)}">🎯 ${esc(m.nombre)} (${money(m.ahorrado)})${ccMetaCumplida(m) ? " ✅" : ""}</option>`);
+  });
+  sel.innerHTML = opts.join("");
+  sel.value = Array.from(sel.options).some(o=> o.value === previo) ? previo : "disponible";
+  if(box) box.style.display = opts.length > 1 ? "" : "none";
+  ccPintarFuenteGasto();
+}
+function ccPintarFuenteGasto(){
+  const sel = document.getElementById("gFuente");
+  if(!sel) return;
+  const deAhorro = sel.value && sel.value !== "disponible";
+  sel.style.border = deAhorro ? "2px solid #E8913A" : "";
+  sel.style.background = deAhorro ? "rgba(232,145,58,.14)" : "";
+  sel.style.fontWeight = deAhorro ? "700" : "";
+}
+// Resta el gasto del fondo o de la meta. Devuelve false (y avisa) si no alcanza.
+function ccDescontarDeAhorro(g, fuente){
+  const monto = Math.round(g.monto||0);
+  if(fuente === "fondo"){
+    const fe = state.fondoEmergencia;
+    if(monto > (fe.ahorrado||0)){ toast("El fondo de emergencia solo tiene " + money(fe.ahorrado||0) + "."); return false; }
+    fe.ahorrado = Math.round((fe.ahorrado||0) - monto);
+    if(!Array.isArray(fe.historial)) fe.historial = [];
+    fe.historial.push({ id: uid(), fecha: g.fecha || fechaLocalHoy(), monto: -monto, retiro: true, gastoId: g.id, nota: g.rubro });
+    g.pagadoCon = "fondo";
+    return true;
+  }
+  if(String(fuente).indexOf("meta:") === 0){
+    const id = fuente.slice(5);
+    const m = (state.metas||[]).find(x=> x.id === id);
+    if(!m){ toast("No se encontró esa meta."); return false; }
+    if(monto > (m.ahorrado||0)){ toast("La meta " + m.nombre + " solo tiene " + money(m.ahorrado||0) + "."); return false; }
+    ccMarcarMetaCumplida(m);   // si ya estaba completa, sigue en "cumplidas" aunque se use su plata
+    m.ahorrado = Math.round((m.ahorrado||0) - monto);
+    g.pagadoCon = "meta"; g.pagadoConId = m.id; g.pagadoConNombre = m.nombre;
+    return true;
+  }
+  return true;
+}
+// Devuelve al fondo o a la meta lo que se había sacado para ese gasto.
+function ccDevolverAAhorro(g){
+  if(!g || !g.pagadoCon) return;
+  const monto = Math.round(g.monto||0);
+  if(g.pagadoCon === "fondo"){
+    const fe = state.fondoEmergencia;
+    fe.ahorrado = Math.round((fe.ahorrado||0) + monto);
+    fe.historial = (fe.historial||[]).filter(h=> h.gastoId !== g.id);
+  } else if(g.pagadoCon === "meta"){
+    const m = (state.metas||[]).find(x=> x.id === g.pagadoConId);
+    if(m) m.ahorrado = Math.round((m.ahorrado||0) + monto);
+  }
+}
 /* ===== Fecha del formulario "Registrar gasto" =====
    El Mes y el Año de abajo siempre siguen a la fecha elegida. Y la fecha vuelve
    sola a HOY cuando entras a Gastos desde otra pestaña, al abrir la app y
@@ -4914,6 +5022,9 @@ function ccFechaGastoAHoy(){
   f.value = fechaLocalHoy();
   ccFormGastoDia = f.value;
   ccSincronizarMesAnioGasto();
+  // y el dinero vuelve a salir del disponible del mes
+  const fu = document.getElementById("gFuente");
+  if(fu){ fu.value = "disponible"; ccPintarFuenteGasto(); }
 }
 // Si la app quedó abierta y ya es otro día, la fecha vuelve a hoy.
 function ccRevisarDiaFormGasto(){
@@ -4933,7 +5044,10 @@ function addGasto(){
   const nota = document.getElementById("gNota").value.trim();
   if(!fecha || monto<=0){ toast("Ingresa la fecha y un monto mayor a cero."); return; }
   if(!ccFechaFormGasto()){ toast("Revisa la fecha: el año no es válido."); return; }
-  state.gastos.push({id:uid(), fecha, mes, anio, rubro, monto, nota});
+  const nuevoGasto = {id:uid(), fecha, mes, anio, rubro, monto, nota};
+  const fuente = (document.getElementById("gFuente")||{}).value || "disponible";
+  if(fuente !== "disponible" && !ccDescontarDeAhorro(nuevoGasto, fuente)) return;
+  state.gastos.push(nuevoGasto);
   if(!state.usoRubros) state.usoRubros = {};
   state.usoRubros[rubro] = (state.usoRubros[rubro]||0) + 1;
   document.getElementById("gMonto").value = "";
@@ -4943,7 +5057,7 @@ function addGasto(){
   // Si para este gasto se cambió el Mes a mano, el siguiente vuelve a tomar
   // el mes de la fecha (la fecha elegida se mantiene).
   ccSincronizarMesAnioGasto();
-  toast("Gasto registrado ✓");
+  toast(nuevoGasto.pagadoCon ? "Gasto registrado · " + ccTextoPagadoCon(nuevoGasto).replace(/^\S+\s/, "").toLowerCase() : "Gasto registrado ✓");
 }
 
 /* Guarda lo que la persona ya escribió en un campo, para que sobreviva si la sección
@@ -5246,6 +5360,7 @@ function deleteGasto(id){
   limpiarPendiente("gasto:"+id);
   const g = state.gastos.find(x=>x.id===id);
   if(g && g.origenDeuda){ deshacerPagoDeuda(id, g.origenDeuda); return; }
+  if(g && g.pagadoCon){ ccDevolverAAhorro(g); toast(g.pagadoCon === "fondo" ? "Gasto eliminado: el dinero volvió al fondo de emergencia" : "Gasto eliminado: el dinero volvió a la meta " + (g.pagadoConNombre||"")); }
   state.gastos = state.gastos.filter(g=>g.id!==id);
   saveState();
   renderGastos();
@@ -5449,10 +5564,11 @@ function pintarGasto(g){
       </div>`;
   }
   return `
-      <div class="receipt">
+      <div class="receipt${g.pagadoCon ? " de-ahorro" : ""}">
         <div class="r-main" onclick="openGastoEdit('${g.id}')" style="cursor:pointer;">
           <div class="r-rubro">${ccIconoPorNombreRubro(g.rubro)} ${esc(ccNombreRubroVisible(g.rubro))}</div>
           <div class="r-meta">${esc(g.fecha)} · ${g.mes} ${g.anio}${g.nota ? " · "+esc(g.nota) : ""}</div>
+          ${g.pagadoCon ? `<div class="r-ahorro">${esc(ccTextoPagadoCon(g))}</div>` : ""}
         </div>
         <div class="r-amount" onclick="openGastoEdit('${g.id}')" style="cursor:pointer;">${money(g.monto)}</div>
         <button class="r-edit" onclick="openGastoEdit('${g.id}')" aria-label="Editar" title="Editar">✎</button>
@@ -5481,6 +5597,23 @@ function saveGastoEdit(id){
   // recalcular mes/año a partir de la fecha nueva
   const d = new Date(fecha + "T00:00:00");
   if(isNaN(d) || !ccAnioRazonable(d.getFullYear())){ toast("Revisa la fecha: el año no es válido."); return; }
+  if(g.pagadoCon && monto !== g.monto){
+    // Pagado con ahorros: la diferencia se ajusta en el fondo o la meta.
+    const delta = Math.round(monto - g.monto);
+    if(g.pagadoCon === "fondo"){
+      const fe = state.fondoEmergencia;
+      if(delta > (fe.ahorrado||0)){ toast("El fondo de emergencia solo tiene " + money(fe.ahorrado||0) + " más."); return; }
+      fe.ahorrado = Math.round((fe.ahorrado||0) - delta);
+      const h = (fe.historial||[]).find(x=> x.gastoId === g.id);
+      if(h){ h.monto = -Math.round(monto); h.fecha = fecha; }
+    } else {
+      const m = (state.metas||[]).find(x=> x.id === g.pagadoConId);
+      if(m){
+        if(delta > (m.ahorrado||0)){ toast("La meta " + m.nombre + " solo tiene " + money(m.ahorrado||0) + " más."); return; }
+        m.ahorrado = Math.round((m.ahorrado||0) - delta);
+      }
+    }
+  }
   g.rubro = rubro;
   g.monto = monto;
   g.fecha = fecha;
@@ -6027,6 +6160,7 @@ async function exportXLSX(){
     const verIngresos = window.ccPuedeVerIngresos !== false;
     const ingresoPeriodo = meses.reduce((t,[m,a])=> t + ingresoDe(m,a), 0);
     const gastadoPeriodo = gastosPeriodo.reduce((t,g)=> t + (g.monto||0), 0);
+    const conAhorrosPeriodo = gastosPeriodo.filter(g=> g.pagadoCon).reduce((t,g)=> t + (g.monto||0), 0);
 
     // 1. Resumen
     const sob = sobrante();
@@ -6038,7 +6172,8 @@ async function exportXLSX(){
       [],
       ["Ingreso del periodo", verIngresos ? Math.round(ingresoPeriodo) : "—"],
       ["Gastado en el periodo", Math.round(gastadoPeriodo)],
-      ["Disponible (ingreso − gastado)", verIngresos ? Math.round(ingresoPeriodo - gastadoPeriodo) : "—"],
+      ["Pagado con ahorros (fondo o metas)", Math.round(conAhorrosPeriodo)],
+      ["Disponible (ingreso − gastado sin lo pagado con ahorros)", verIngresos ? Math.round(ingresoPeriodo - (gastadoPeriodo - conAhorrosPeriodo)) : "—"],
       ["Cantidad de gastos", gastosPeriodo.length],
       [],
       ["Presupuesto de hoy (mensual)"],
@@ -6073,9 +6208,10 @@ async function exportXLSX(){
     hojas.push({nombre:"Presupuesto", filas:filasPresu, filtro:true});
 
     // 3. Gastos del periodo, uno por fila
-    const filasGastos = [["Fecha","Mes","Año","Rubro","Monto","Nota"]];
+    const filasGastos = [["Fecha","Mes","Año","Rubro","Monto","Nota","Pagado con"]];
     gastosPeriodo.slice().sort((a,b)=> (Number(a.anio)*100+MESES.indexOf(a.mes)) - (Number(b.anio)*100+MESES.indexOf(b.mes)) || (a.fecha||"").localeCompare(b.fecha||""))
-      .forEach(g=> filasGastos.push([g.fecha, g.mes, g.anio, ccNombreRubroVisible(g.rubro), Math.round(g.monto), g.nota]));
+      .forEach(g=> filasGastos.push([g.fecha, g.mes, g.anio, ccNombreRubroVisible(g.rubro), Math.round(g.monto), g.nota,
+        g.pagadoCon === "fondo" ? "Fondo de emergencia" : (g.pagadoCon === "meta" ? "Meta: " + (g.pagadoConNombre||"") : "Dinero disponible")]));
     hojas.push({nombre:"Gastos", filas:filasGastos, filtro:true});
 
     // 4. Comparativo mes a mes (solo si el periodo tiene más de un mes)
@@ -7533,7 +7669,9 @@ function addMeta(){
   const tasaAnual = tasaEl ? (parseFloat(String(tasaEl.value).replace(",","."))||0) : 0;
   if(!nombre || objetivo<=0){ toast("Completa el nombre y el monto objetivo."); return; }
   const aporteMensual = calcularAporteMeta(objetivo, ahorrado, mesesObjetivo).mensual;
-  state.metas.push({id:uid(), nombre, objetivo, ahorrado, fecha, mesesObjetivo, aporteMensual, tasaAnual});
+  const nuevaMeta = {id:uid(), nombre, objetivo, ahorrado, fecha, mesesObjetivo, aporteMensual, tasaAnual, creadaEn: fechaLocalHoy()};
+  ccMarcarMetaCumplida(nuevaMeta);
+  state.metas.push(nuevaMeta);
   ["mNombre","mObjetivo","mAhorrado","mFecha","mMeses","mTasa"].forEach(id=>document.getElementById(id).value="");
   document.getElementById("metaAporteHint").textContent = "";
   ocultarRendMeta();
@@ -7674,11 +7812,12 @@ function confirmarAbonoMeta(id){
   if(monto<=0){ toast("Ingresa un monto mayor a cero."); return; }
   m.ahorrado += monto;
   m.ultimoAbono = fechaLocalHoy();   // para el recordatorio del aporte del mes
+  const recienCumplida = ccMarcarMetaCumplida(m);
   abonandoMetaId = null;
   saveState();
   renderAhorros();
   renderDashboard();
-  toast("Ahorro registrado");
+  toast(recienCumplida ? "🎉 ¡Cumpliste la meta " + m.nombre + "! Quedó en Metas cumplidas" : "Ahorro registrado");
 }
 function deleteMeta(id){
   if(!ccPuedeEditarCheck()) return;
@@ -7701,6 +7840,8 @@ function saveMetaEdit(id){
   m.fecha = document.getElementById("emF_"+id).value;
   m.mesesObjetivo = parseInt(document.getElementById("emM_"+id).value)||0;
   m.aporteMensual = calcularAporteMeta(m.objetivo, m.ahorrado, m.mesesObjetivo).mensual;
+  // Si al editarla ya no llega al objetivo, vuelve a quedar en curso.
+  if(m.ahorrado < m.objetivo) delete m.cumplidaEn; else ccMarcarMetaCumplida(m);
   editingMetaId = null;
   saveState();
   renderAhorros();
@@ -7774,6 +7915,7 @@ function eliminarAporteFondoEmergencia(id){
   if(!ccPuedeEditarCheck()) return;
   const entrada = state.fondoEmergencia.historial.find(h=>h.id===id);
   if(!entrada) return;
+  if(entrada.retiro){ toast("Ese retiro se borra desde Gastos (borrando el gasto)."); return; }
   limpiarPendiente("feaporte:"+id);
   state.fondoEmergencia.ahorrado = Math.max(0, (state.fondoEmergencia.ahorrado||0) - entrada.monto);
   state.fondoEmergencia.historial = state.fondoEmergencia.historial.filter(h=>h.id!==id);
@@ -7790,7 +7932,11 @@ function renderFeHistorial(){
     box.innerHTML = `<div class="empty-state">Aún no has registrado aportes al fondo de emergencia.</div>`;
     return;
   }
-  box.innerHTML = historial.map(h=>`
+  box.innerHTML = historial.map(h=> h.retiro ? `
+    <div class="receipt de-ahorro">
+      <div class="r-main"><div class="r-rubro">Retiro para un gasto${h.nota ? ": " + esc(h.nota) : ""}</div><div class="r-meta">${esc(h.fecha)} · se edita o borra desde Gastos</div></div>
+      <div class="r-amount">−${money(Math.abs(h.monto||0))}</div>
+    </div>` : `
     <div class="receipt">
       <div class="r-main"><div class="r-rubro">Aporte al fondo de emergencia</div><div class="r-meta">${esc(h.fecha)}</div></div>
       <div class="r-amount" style="color:var(--brand-dark);">+${money(h.monto)}</div>
@@ -7800,6 +7946,41 @@ function renderFeHistorial(){
     </div>`).join("");
 }
 
+/* Presupuesto → Ahorro: cuánto piden este mes el fondo de emergencia y las
+   metas en curso (solo el valor del mes), comparado con lo que dejaste en el
+   rubro de Ahorro. Verde si alcanza, naranja si no. */
+function ccAhorrosQuePidenElMes(){
+  const items = [];
+  const fe = state.fondoEmergencia || {};
+  const objFE = totalPresupuestado() * (fe.meses||0);
+  if((fe.aporteMensual||0) > 0 && !(objFE > 0 && (fe.ahorrado||0) >= objFE)) items.push({ nombre:"🛟 Fondo de emergencia", monto: fe.aporteMensual });
+  (state.metas||[]).forEach(m=>{
+    if(ccMetaCumplida(m)) return;
+    const p = calcularProgresoMeta(m);
+    if(p && !p.lograda && (p.mensual||0) > 0) items.push({ nombre:"🎯 " + m.nombre, monto: p.mensual });
+  });
+  return items;
+}
+function ccCajaAhorrosDelMes(enAhorro){
+  const items = ccAhorrosQuePidenElMes();
+  if(!items.length) return null;
+  const pide = Math.round(items.reduce((t,x)=> t + x.monto, 0));
+  const alcanza = (enAhorro||0) >= pide;
+  const caja = document.createElement("div");
+  caja.id = "ccCajaAhorrosMes";
+  caja.style.cssText = alcanza
+    ? "margin:10px 12px 12px; padding:11px 13px; border-radius:12px; background:var(--brand-soft); border:1px solid #BFE9DA; color:var(--brand-dark);"
+    : "margin:10px 12px 12px; padding:11px 13px; border-radius:12px; background:#FFF4E6; border:1px solid #F0D8A8; color:#8A5A1F;";
+  caja.innerHTML =
+    `<div style="font-weight:800; font-size:13.5px; margin-bottom:6px;">Tus ahorros piden este mes: ${money(pide)}</div>`
+    + items.map(x=> `<div style="display:flex; justify-content:space-between; gap:8px; font-size:12.5px; line-height:1.5;"><span>${esc(x.nombre)}</span><span style="font-family:var(--font-mono);">${money(x.monto)}</span></div>`).join("")
+    + `<div style="margin-top:8px; padding-top:7px; border-top:1px dashed currentColor; font-size:12.5px; font-weight:700;">`
+    + (alcanza
+        ? `✓ Te alcanza: en Ahorro tienes ${money(enAhorro)}${enAhorro > pide ? " (sobran " + money(enAhorro - pide) + ")" : ""}.`
+        : `⚠ No te alcanza: en Ahorro tienes ${money(enAhorro||0)}, te faltan ${money(pide - (enAhorro||0))}. Sube el rubro de Ahorro para cubrirlo.`)
+    + `</div>`;
+  return caja;
+}
 function ahorroDisponibleMensual(){
   // suma de los rubros tipo "Ahorro" según el presupuesto
   return state.rubros.filter(r=>r.tipo==="Ahorro").reduce((s,r)=>s+montoRubro(r),0);
@@ -7808,6 +7989,7 @@ function totalComprometidoAhorro(){
   // cuánto pides mensual entre fondo de emergencia + aportes de metas
   const aporteFE = state.fondoEmergencia.aporteMensual || 0;
   const aporteMetas = state.metas.reduce((s,m)=>{
+    if(ccMetaCumplida(m)) return s;
     const ap = calcularProgresoMeta(m);
     return s + (ap && !ap.lograda ? (ap.mensual||0) : 0);
   },0);
@@ -7855,6 +8037,36 @@ function renderAhorroDisponible(){
   html += `</div>`;
   box.innerHTML = html;
 }
+/* Historial desplegable de metas cumplidas (al final de "Tus metas"). */
+let verMetasCumplidas = false;
+function ccMesesEntre(isoA, isoB){
+  if(!isoA || !isoB) return null;
+  const a = new Date(isoA+"T00:00:00"), b = new Date(isoB+"T00:00:00");
+  if(isNaN(a) || isNaN(b)) return null;
+  return Math.max(0, (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth()));
+}
+function ccHtmlMetasCumplidas(lista){
+  if(!lista.length) return "";
+  return `
+    <button type="button" class="cc-colapsable" style="margin-top:12px;" onclick="verMetasCumplidas=!verMetasCumplidas; renderAhorros();">
+      <span>✅ Metas cumplidas (${lista.length})</span><span>${verMetasCumplidas?"▴":"▾"}</span>
+    </button>
+    ${verMetasCumplidas ? lista.map(m=>{
+      const meses = ccMesesEntre(m.creadaEn, m.cumplidaEn);
+      return `<div class="card" style="margin-top:8px; background:var(--brand-soft); border-color:#BFE9DA;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div style="min-width:0;">
+            <div style="font-weight:700; font-size:14.5px;">🏆 ${esc(m.nombre)}</div>
+            <div class="hint" style="margin-top:2px; color:var(--brand-dark);">Objetivo: <b>${money(m.objetivo)}</b>${m.cumplidaEn ? " · cumplida el " + esc(m.cumplidaEn) : ""}${meses!=null ? " · te tomó " + (meses===0 ? "menos de un mes" : meses + " mes" + (meses===1?"":"es")) : ""}</div>
+            <div class="hint" style="margin-top:2px;">Guardado hoy: <b>${money(m.ahorrado||0)}</b>${(m.ahorrado||0) < m.objetivo ? " (ya usaste " + money(m.objetivo - (m.ahorrado||0)) + ")" : ""}</div>
+          </div>
+          ${esPendiente("meta:"+m.id)
+            ? `<button class="r-del confirm" onclick="event.stopPropagation(); deleteMeta('${m.id}')">✓ Eliminar</button>`
+            : `<button class="r-del" onclick="event.stopPropagation(); pideConfirmar('meta:${m.id}', renderAhorros)" aria-label="Eliminar">×</button>`}
+        </div>
+      </div>`;
+    }).join("") : ""}`;
+}
 function renderAhorros(){
   renderAhorroDisponible();
   const inpM = document.getElementById("feMeses"), inpA = document.getElementById("feAhorrado"), inpAp = document.getElementById("feAporte"), inpT = document.getElementById("feTasa");
@@ -7871,7 +8083,9 @@ function renderAhorros(){
     box.innerHTML = `<div class="empty-state">Aún no tienes metas de ahorro.<br>Crea la primera arriba (viaje, cuota inicial, estudios…).</div>`;
     return;
   }
-  box.innerHTML = state.metas.map(m=>{
+  const metasEnCurso = state.metas.filter(m=> !ccMetaCumplida(m));
+  const metasCumplidas = state.metas.filter(m=> ccMetaCumplida(m));
+  box.innerHTML = (metasEnCurso.length ? "" : `<div class="empty-state">No tienes metas en curso. ¡Crea una nueva arriba!</div>`) + metasEnCurso.map(m=>{
     if(editingMetaId === m.id){
       return `<div class="edit-panel">
         <label>Nombre de la meta</label>
@@ -7939,7 +8153,7 @@ function renderAhorros(){
            </div>`
         : `<button class="btn-ghost" style="margin-top:0;" onclick="event.stopPropagation(); abonandoMetaId='${m.id}'; renderAhorros();">Agregar ahorro</button>`}
     </div>`;
-  }).join("");
+  }).join("") + ccHtmlMetasCumplidas(metasCumplidas);
   if(editingMetaId){
     ["emO_","emA_"].forEach(pref=>{
       const el = document.getElementById(pref+editingMetaId);
@@ -9305,11 +9519,11 @@ function ccAportesPendientesMes(){
   const fe = state.fondoEmergencia || {};
   const objFE = totalPresupuestado() * (fe.meses||0);
   if((fe.aporteMensual||0) > 0 && objFE > 0 && (fe.ahorrado||0) < objFE){
-    const aporto = (fe.historial||[]).some(h=> String(h.fecha||"").slice(0,7) === mes);
+    const aporto = (fe.historial||[]).some(h=> !h.retiro && (h.monto||0) > 0 && String(h.fecha||"").slice(0,7) === mes);
     if(!aporto) out.push({ tipo:"fondo", id:"fondo", nombre:"Fondo de emergencia", icono:"🛟", aporte: fe.aporteMensual, ahorrado: fe.ahorrado||0, objetivo: objFE });
   }
   (state.metas||[]).forEach(m=>{
-    if((m.aporteMensual||0) <= 0 || (m.objetivo||0) <= 0 || (m.ahorrado||0) >= m.objetivo) return;
+    if(ccMetaCumplida(m) || (m.aporteMensual||0) <= 0 || (m.objetivo||0) <= 0 || (m.ahorrado||0) >= m.objetivo) return;
     if(String(m.ultimoAbono||"").slice(0,7) === mes) return;
     out.push({ tipo:"meta", id:m.id, nombre:m.nombre, icono:"🎯", aporte:m.aporteMensual, ahorrado:m.ahorrado||0, objetivo:m.objetivo });
   });
