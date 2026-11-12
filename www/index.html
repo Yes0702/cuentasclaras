@@ -6310,11 +6310,17 @@ function ccFechaEnMesesIso(n){
   return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
 }
 function ccCalcPagoDeuda(origen){
-  const elM = document.getElementById("dMeses"), elF = document.getElementById("dFecha"), elP = document.getElementById("dPago");
-  const hint = document.getElementById("deudaPagoHint");
-  if(!elM || !elF || !elP || !hint) return;
-  const saldo = numFromMasked("dSaldo") || numFromMasked("dInicial");
-  const tasa = parseFloat(String(document.getElementById("dTasa").value||"").replace(",",".")) || 0;
+  ccCalcPagoDeudaEn({ m:"dMeses", f:"dFecha", p:"dPago", h:"deudaPagoHint", t:"dTasa", saldo:["dSaldo","dInicial"] }, origen);
+}
+function ccIdsEditDeuda(id){ return { m:"edM_"+id, f:"edF_"+id, p:"edP_"+id, h:"deudaPagoHintEdit_"+id, t:"edT_"+id, saldo:["edS_"+id] }; }
+function ccCalcPagoDeudaEdit(id, origen){ ccCalcPagoDeudaEn(ccIdsEditDeuda(id), origen); }
+function ccCalcPagoDeudaEn(ids, origen){
+  const elM = document.getElementById(ids.m), elF = document.getElementById(ids.f), elP = document.getElementById(ids.p);
+  const hint = document.getElementById(ids.h), elT = document.getElementById(ids.t);
+  if(!elM || !elF || !elP || !hint || !elT) return;
+  let saldo = 0;
+  for(const sid of ids.saldo){ if(document.getElementById(sid)){ saldo = numFromMasked(sid); if(saldo > 0) break; } }
+  const tasa = parseFloat(String(elT.value||"").replace(",",".")) || 0;
   const i = tasa / 100 / 12;
   const fechaFinTxt = n => { const d = new Date(ccFechaEnMesesIso(n)+"T00:00:00"); return MESES_LARGO[d.getMonth()] + " " + d.getFullYear(); };
   if(!(saldo > 0)){ hint.textContent = (origen==="cuotas"||origen==="fecha"||origen==="pago") ? "Escribe primero la deuda inicial o el saldo actual." : ""; return; }
@@ -7383,24 +7389,8 @@ function saveDeudaEdit(id){
   renderDashboard();
   ccReprogramarNativoPronto();
 }
-function onFechaDeudaEditChange(id){
-  const meses = mesesHastaFecha(document.getElementById("edF_"+id).value);
-  if(meses>0) document.getElementById("edM_"+id).value = meses;
-  onMesesDeudaEditInput(id);
-}
-function onMesesDeudaEditInput(id){
-  const meses = parseInt(document.getElementById("edM_"+id).value)||0;
-  const saldo = numFromMasked("edS_"+id);
-  const hint = document.getElementById("deudaPagoHintEdit_"+id);
-  if(!hint) return;
-  if(meses>0 && saldo>0){
-    const pagoSugerido = Math.ceil(saldo/meses);
-    setMasked("edP_"+id, pagoSugerido);
-    hint.textContent = `Pago sugerido: ${money(pagoSugerido)}/mes para terminar en ${meses} mes${meses===1?"":"es"}.`;
-  } else {
-    hint.textContent = "";
-  }
-}
+function onFechaDeudaEditChange(id){ ccCalcPagoDeudaEdit(id, "fecha"); }
+function onMesesDeudaEditInput(id){ ccCalcPagoDeudaEdit(id, "cuotas"); }
 /* Ver/ocultar el detalle de movimientos de una deuda con varias compras */
 let verMovimientosSet = new Set();
 function toggleVerMovimientos(id){
@@ -7536,10 +7526,15 @@ function renderDeudas(){
           <div><label>Deuda inicial</label><input type="text" inputmode="numeric" id="edI_${d.id}" class="mono-input" value="${d.inicial.toLocaleString('es-CO')}"></div>
           <div><label>Saldo actual</label><input type="text" inputmode="numeric" id="edS_${d.id}" class="mono-input" value="${d.saldo.toLocaleString('es-CO')}"></div>
         </div>
-        <label>Pago mensual (solo de las compras, sin cuota de manejo)</label>
-        <input type="text" inputmode="numeric" id="edP_${d.id}" class="mono-input" value="${(d.pago-(d.cuotaManejoActiva?d.cuotaManejoValor||0:0)).toLocaleString('es-CO')}">
-        <label>% de interés anual (opcional)</label>
-        <input type="text" inputmode="decimal" id="edT_${d.id}" class="mono-input" value="${d.tasaAnual||""}">
+        <label>% de interés anual que te cobran (opcional)</label>
+        <input type="text" inputmode="decimal" id="edT_${d.id}" class="mono-input" value="${d.tasaAnual||""}" oninput="ccCalcPagoDeudaEdit('${d.id}','tasa')">
+        <div class="field-row">
+          <div><label>¿Cuántas cuotas faltan?</label><input type="number" min="1" id="edM_${d.id}" class="mono-input" value="${d.mesesObjetivo||""}" oninput="ccCalcPagoDeudaEdit('${d.id}','cuotas')"></div>
+          <div><label>📅 Fecha final (opcional)</label><input type="date" id="edF_${d.id}" value="${d.fecha||""}" onchange="ccCalcPagoDeudaEdit('${d.id}','fecha')"></div>
+        </div>
+        <label>💰 Pago mensual (solo de las compras, sin cuota de manejo)</label>
+        <input type="text" inputmode="numeric" id="edP_${d.id}" class="mono-input" value="${(d.pago-(d.cuotaManejoActiva?d.cuotaManejoValor||0:0)).toLocaleString('es-CO')}" oninput="ccCalcPagoDeudaEdit('${d.id}','pago')">
+        <div class="hint" id="deudaPagoHintEdit_${d.id}"></div>
         <label style="display:flex; align-items:center; gap:12px; margin-top:14px; padding:12px 14px; background:var(--surface-2); border:1px solid var(--line); border-radius:11px; text-transform:none; letter-spacing:0; font-weight:600; color:var(--ink); cursor:pointer;">
           <input type="checkbox" id="edTieneManejo_${d.id}" style="width:26px; height:26px; flex:0 0 auto; accent-color:var(--brand-dark);" ${d.cuotaManejoActiva?"checked":""} onchange="document.getElementById('edManejoBody_${d.id}').style.display=this.checked?'block':'none';">
           💳 ¿Tiene cuota de manejo?
@@ -7558,11 +7553,6 @@ function renderDeudas(){
           <option value="">Sin recordatorio</option>
           ${Array.from({length:31},(_,k)=>k+1).map(dd=>`<option value="${dd}" ${d.diaPago==dd?"selected":""}>Día ${dd}</option>`).join("")}
         </select>
-        <label>Fecha objetivo de pago (opcional)</label>
-        <input type="date" id="edF_${d.id}" value="${d.fecha||""}" onchange="onFechaDeudaEditChange('${d.id}')">
-        <label>O meses para pagarla (opcional, calcula el pago sugerido)</label>
-        <input type="number" min="1" id="edM_${d.id}" class="mono-input" value="${d.mesesObjetivo||""}" oninput="onMesesDeudaEditInput('${d.id}')">
-        <div class="hint" id="deudaPagoHintEdit_${d.id}"></div>
         <div class="edit-actions">
           <button class="btn-primary" style="margin:0;" onclick="saveDeudaEdit('${d.id}')">Guardar</button>
           ${esPendiente("deuda:"+d.id)
@@ -7683,6 +7673,9 @@ function renderDeudas(){
       const el = document.getElementById(pref+editingDeudaId);
       if(el) maskMiles(el);
     });
+    const edS = document.getElementById("edS_"+editingDeudaId);
+    if(edS && !edS.dataset.ccCalc){ const idE = editingDeudaId; edS.dataset.ccCalc = "1"; edS.addEventListener("input", ()=> ccCalcPagoDeudaEdit(idE, "saldo")); }
+    if(numFromMasked("edP_"+editingDeudaId) > 0 && numFromMasked("edS_"+editingDeudaId) > 0) ccCalcPagoDeudaEdit(editingDeudaId, "pago");
   }
   if(abonandoDeudaId){
     const el = document.getElementById("abonoDeudaInput_"+abonandoDeudaId);
