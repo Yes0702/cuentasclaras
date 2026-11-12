@@ -2650,7 +2650,7 @@ function hidratar(parsed, base){
   ccMigrarAbonosCapital(s);
   s.fondoEmergencia = Object.assign({meses:3, ahorrado:0, aporteMensual:0, tasaAnual:0, historial:[]}, s.fondoEmergencia||{});
   ccAplicarRendimientos(s.fondoEmergencia, "ahorrado");
-  (s.metas||[]).forEach(m=> ccAplicarRendimientos(m, "ahorrado"));
+  (s.metas||[]).forEach(m=>{ if(ccAplicarRendimientos(m, "ahorrado") > 0) ccMarcarMetaCumplida(m); });
   s.fondoEmergencia.historial = Array.isArray(s.fondoEmergencia.historial) ? s.fondoEmergencia.historial : [];
   s.inversiones = Array.isArray(s.inversiones) ? s.inversiones : [];
   s.alarmas = Array.isArray(s.alarmas) && s.alarmas.length
@@ -2966,11 +2966,12 @@ function totalAhorradoMetas(){ return state.metas.reduce((s,m)=> s + m.ahorrado,
    igual en todos los celulares, al unirlos no se cuenta dos veces. */
 function ccMesClaveDe(d){ return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0"); }
 function ccAplicarRendimientos(obj, campo){
-  if(!obj) return;
+  if(!obj) return 0;
   const tasa = Number(obj.tasaAnual) || 0;
-  if(tasa <= 0){ if(obj.interesDesde) delete obj.interesDesde; return; }
+  if(tasa <= 0){ if(obj.interesDesde) delete obj.interesDesde; return 0; }
   const hoyMes = ccMesClaveDe(new Date());
-  if(!/^\d{4}-\d{2}$/.test(String(obj.interesDesde||""))){ obj.interesDesde = hoyMes; return; }
+  if(!/^\d{4}-\d{2}$/.test(String(obj.interesDesde||""))){ obj.interesDesde = hoyMes; return 0; }
+  let total = 0;
   let [y, m] = obj.interesDesde.split("-").map(Number);
   for(let i = 0; i < 600; i++){
     if(m === 12){ y++; m = 1; } else m++;
@@ -2981,7 +2982,19 @@ function ccAplicarRendimientos(obj, campo){
     obj[campo] = saldo + r;
     obj.interesGenerado = (Number(obj.interesGenerado) || 0) + r;
     obj.interesDesde = k;
+    total += r;
   }
+  return total;
+}
+// Pone al día los rendimientos del celular (ej. la app quedó abierta y empezó
+// un mes nuevo). Devuelve true si cambió algo.
+function ccRendimientosAlDia(s){
+  s = s || state;
+  if(!s) return false;
+  const antes = JSON.stringify([s.fondoEmergencia, s.metas]);
+  ccAplicarRendimientos(s.fondoEmergencia, "ahorrado");
+  (s.metas||[]).forEach(m=>{ if(ccAplicarRendimientos(m, "ahorrado") > 0) ccMarcarMetaCumplida(m); });
+  return JSON.stringify([s.fondoEmergencia, s.metas]) !== antes;
 }
 function ccProximoMesLargo(){ const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()+1); return MESES_LARGO[d.getMonth()] + " " + d.getFullYear(); }
 /* ---- Metas cumplidas ----
@@ -3794,7 +3807,7 @@ function renderChart(key){
       const ingresoMesI = ((state.ingresoPrincipal && state.ingresoPrincipal.monto) || 0) +
         (state.ingresosOcasionales||[]).filter(x=>x.mes===MESES[i] && x.anio===anio).reduce((s,x)=>s+(x.monto||0), 0);
       if(ingresoMesI > 0){
-        const difIngreso = ingresoMesI - real[i];
+        const difIngreso = ingresoMesI - (real[i] - totalPagadoConAhorrosMes(MESES[i], anio));
         comparacion = ` · Ingreso <b>${money(ingresoMesI)}</b> · ${difIngreso>=0?"Te sobró":"Te falta"} <b>${money(Math.abs(difIngreso))}</b>`;
       }
     } else if(presu>0){
@@ -4981,6 +4994,7 @@ function ccPintarFuenteGasto(){
 }
 // Resta el gasto del fondo o de la meta. Devuelve false (y avisa) si no alcanza.
 function ccDescontarDeAhorro(g, fuente){
+  ccRendimientosAlDia(state);   // si empezó un mes nuevo con la app abierta, primero se suma el rendimiento
   const monto = Math.round(g.monto||0);
   if(fuente === "fondo"){
     const fe = state.fondoEmergencia;
@@ -5006,6 +5020,7 @@ function ccDescontarDeAhorro(g, fuente){
 // Devuelve al fondo o a la meta lo que se había sacado para ese gasto.
 function ccDevolverAAhorro(g){
   if(!g || !g.pagadoCon) return;
+  ccRendimientosAlDia(state);   // si empezó un mes nuevo con la app abierta, primero se suma el rendimiento
   const monto = Math.round(g.monto||0);
   if(g.pagadoCon === "fondo"){
     const fe = state.fondoEmergencia;
@@ -5013,8 +5028,10 @@ function ccDevolverAAhorro(g){
     fe.historial = (fe.historial||[]).filter(h=> h.gastoId !== g.id);
   } else if(g.pagadoCon === "meta"){
     const m = (state.metas||[]).find(x=> x.id === g.pagadoConId);
-    if(m) m.ahorrado = Math.round((m.ahorrado||0) + monto);
+    if(!m) return false;
+    m.ahorrado = Math.round((m.ahorrado||0) + monto);
   }
+  return true;
 }
 /* ===== Fecha del formulario "Registrar gasto" =====
    El Mes y el Año de abajo siempre siguen a la fecha elegida. Y la fecha vuelve
@@ -5055,10 +5072,16 @@ function ccFechaGastoAHoy(){
 // Si la app quedó abierta y ya es otro día, la fecha vuelve a hoy.
 function ccRevisarDiaFormGasto(){
   if(ccFormGastoDia && ccFormGastoDia !== fechaLocalHoy()) ccFechaGastoAHoy();
+  if(typeof state !== "undefined" && window.ccPuedeEditar !== false && ccRendimientosAlDia(state)){
+    saveState();
+    if(typeof renderAll === "function") renderAll();
+  }
 }
 ["change","input"].forEach(ev=> document.getElementById("gFecha").addEventListener(ev, ccSincronizarMesAnioGasto));
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState === "visible") ccRevisarDiaFormGasto(); });
 window.addEventListener("focus", ccRevisarDiaFormGasto);
+// Si la app queda abierta pasada la medianoche, cada minuto revisa si cambió el día / el mes.
+setInterval(()=>{ if(document.visibilityState === "visible") ccRevisarDiaFormGasto(); }, 60000);
 
 function addGasto(){
   if(!ccPuedeEditarCheck()) return;
@@ -5386,7 +5409,7 @@ function deleteGasto(id){
   limpiarPendiente("gasto:"+id);
   const g = state.gastos.find(x=>x.id===id);
   if(g && g.origenDeuda){ deshacerPagoDeuda(id, g.origenDeuda); return; }
-  if(g && g.pagadoCon){ ccDevolverAAhorro(g); toast(g.pagadoCon === "fondo" ? "Gasto eliminado: el dinero volvió al fondo de emergencia" : "Gasto eliminado: el dinero volvió a la meta " + (g.pagadoConNombre||"")); }
+  if(g && g.pagadoCon){ const volvio = ccDevolverAAhorro(g); toast(g.pagadoCon === "fondo" ? "Gasto eliminado: el dinero volvió al fondo de emergencia" : (volvio ? "Gasto eliminado: el dinero volvió a la meta " + (g.pagadoConNombre||"") : "Gasto eliminado (la meta " + (g.pagadoConNombre||"") + " ya no existe)")); }
   state.gastos = state.gastos.filter(g=>g.id!==id);
   saveState();
   renderGastos();
@@ -5615,6 +5638,7 @@ function saveGastoEdit(id){
   if(!ccPuedeEditarCheck()) return;
   const g = state.gastos.find(x=>x.id===id);
   if(!g) return;
+  if(g.pagadoCon) ccRendimientosAlDia(state);
   const rubro = document.getElementById("egRubro_"+id).value;
   const monto = numFromMasked("egMonto_"+id);
   const fecha = document.getElementById("egFecha_"+id).value;
@@ -5639,6 +5663,10 @@ function saveGastoEdit(id){
         m.ahorrado = Math.round((m.ahorrado||0) - delta);
       }
     }
+  }
+  if(g.pagadoCon === "fondo"){
+    const h = (state.fondoEmergencia.historial||[]).find(x=> x.gastoId === g.id);
+    if(h){ h.fecha = fecha; h.nota = rubro; }
   }
   g.rubro = rubro;
   g.monto = monto;
@@ -6329,14 +6357,16 @@ function ccCalcPagoDeudaEn(ids, origen){
     const f = elF.value ? new Date(elF.value+"T00:00:00") : null;
     const hoy = new Date(); hoy.setHours(0,0,0,0);
     const n = (f && !isNaN(f) && f > hoy) ? Math.max(1, (f.getFullYear()-hoy.getFullYear())*12 + (f.getMonth()-hoy.getMonth())) : 0;
-    if(n > 0) elM.value = n;
+    if(!(n > 0)){ if(elF.value) hint.textContent = "⚠️ La fecha final debe ser después de hoy."; return; }
+    elM.value = n;
   }
   const n = parseInt(elM.value) || 0;
   if((origen === "cuotas" || origen === "fecha" || origen === "tasa" || origen === "saldo") && n > 0){
     const pago = ccCuotaFija(saldo, n, i);
     setMasked(elP, pago);
     if(origen !== "fecha") elF.value = ccFechaEnMesesIso(n);
-    hint.innerHTML = `<b>${n}</b> cuota${n===1?"":"s"} de <b>${money(pago)}</b>${i>0 ? " · pagarás ~" + money(Math.max(0, pago*n - saldo)) + " de interés" : ""} · terminas en ${fechaFinTxt(n)}.`;
+    const finTxt = (origen === "fecha" && elF.value) ? (()=>{ const d = new Date(elF.value+"T00:00:00"); return MESES_LARGO[d.getMonth()] + " " + d.getFullYear(); })() : fechaFinTxt(n);
+    hint.innerHTML = `<b>${n}</b> cuota${n===1?"":"s"} de <b>${money(pago)}</b>${i>0 ? " · pagarás ~" + money(Math.max(0, pago*n - saldo)) + " de interés" : ""} · terminas en ${finTxt}.`;
     return;
   }
   if(origen === "cuotas" || origen === "fecha"){ if(!(n > 0)) hint.textContent = ""; return; }
@@ -6662,7 +6692,7 @@ function addDeuda(){
     if(!nombre || valor<=0){ toast("Completa el nombre y el monto del avance."); return; }
     const fechaMov = fechaAvance || fechaLocalHoy();
     const cuotaMensualAvance = cuotasAvance>0 ? Math.ceil(valor/cuotasAvance) : 0;
-    const nuevaDeuda = {id:uid(), nombre, inicial:valor, saldo:valor, pago:0, fecha, mesesObjetivo, tasaAnual:0, interesPagado:0, diaPago, diaCorte, interesAcumuladoNoPagado:0, cuotaManejoActiva, cuotaManejoValor};
+    const nuevaDeuda = {id:uid(), nombre, inicial:valor, saldo:valor, pago:0, fecha:"", mesesObjetivo:0, tasaAnual:0, interesPagado:0, diaPago, diaCorte, interesAcumuladoNoPagado:0, cuotaManejoActiva, cuotaManejoValor};
     nuevaDeuda.movimientos = [{
       id: uid(), tipo: "avance", descripcion: nombre, valor, saldo: valor,
       cuotas: cuotasAvance, cuotaMensual: cuotaMensualAvance, cuotasPagadas: 0,
@@ -6671,7 +6701,8 @@ function addDeuda(){
     }];
     state.deudas.push(nuevaDeuda);
     recalcularDeuda(nuevaDeuda);
-    ["dNombre","dAvanceValor","dAvanceFecha","dAvanceTasa","dAvanceCuotas","dCorte","dDiaPago","dFecha","dMeses","dManejoValor"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+    ["dNombre","dAvanceValor","dAvanceFecha","dAvanceTasa","dAvanceCuotas","dCorte","dDiaPago","dFecha","dMeses","dManejoValor","dInicial","dSaldo","dPago","dTasa"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+    { const h = document.getElementById("deudaPagoHint"); if(h) h.textContent = ""; }
     document.getElementById("dTieneManejo").checked = false;
     document.getElementById("dManejoBody").style.display = "none";
     saveState();
@@ -6698,7 +6729,7 @@ function addDeuda(){
     cuotaMensual: pago,
     cuotasPagadas: 0,
     tasaAnual: tasaAnual,
-    fecha: fecha,
+    fecha: fechaLocalHoy(),
     primerMes: "", // el saldo inicial de una deuda nueva cuenta desde ya, no se difiere
     activo: saldo > 0
   }];
@@ -7675,7 +7706,15 @@ function renderDeudas(){
     });
     const edS = document.getElementById("edS_"+editingDeudaId);
     if(edS && !edS.dataset.ccCalc){ const idE = editingDeudaId; edS.dataset.ccCalc = "1"; edS.addEventListener("input", ()=> ccCalcPagoDeudaEdit(idE, "saldo")); }
-    if(numFromMasked("edP_"+editingDeudaId) > 0 && numFromMasked("edS_"+editingDeudaId) > 0) ccCalcPagoDeudaEdit(editingDeudaId, "pago");
+    const dE = state.deudas.find(x=> x.id === editingDeudaId);
+    const movsActivos = dE && Array.isArray(dE.movimientos) ? dE.movimientos.filter(m=> (m.saldo||0) > 0) : [];
+    if(movsActivos.length > 1){
+      // Varias compras, cada una con sus cuotas: la deuda termina con la última cuota que falte.
+      const faltan = Math.max(0, ...movsActivos.map(m=> (m.cuotas||0) > 0 ? Math.max(0, (m.cuotas||0) - (m.cuotasPagadas||0)) : 0));
+      const elM = document.getElementById("edM_"+editingDeudaId), elF = document.getElementById("edF_"+editingDeudaId), h = document.getElementById("deudaPagoHintEdit_"+editingDeudaId);
+      if(faltan > 0 && elM && elF){ elM.value = faltan; elF.value = ccFechaEnMesesIso(faltan); }
+      if(h) h.innerHTML = faltan > 0 ? `Tiene ${movsActivos.length} compras: la última cuota se paga en <b>${MESES_LARGO[new Date(ccFechaEnMesesIso(faltan)+"T00:00:00").getMonth()]} ${new Date(ccFechaEnMesesIso(faltan)+"T00:00:00").getFullYear()}</b> (${faltan} cuota${faltan===1?"":"s"}).` : `Tiene ${movsActivos.length} compras.`;
+    } else if(numFromMasked("edP_"+editingDeudaId) > 0 && numFromMasked("edS_"+editingDeudaId) > 0) ccCalcPagoDeudaEdit(editingDeudaId, "pago");
   }
   if(abonandoDeudaId){
     const el = document.getElementById("abonoDeudaInput_"+abonandoDeudaId);
@@ -7712,6 +7751,7 @@ document.getElementById("feAporte").addEventListener("input", e=>{
 document.getElementById("feTasa").addEventListener("input", e=>{
   if(!ccPuedeEditarCheck()) return;
   state.fondoEmergencia.tasaAnual = parseFloat(e.target.value)||0;
+  ccAplicarRendimientos(state.fondoEmergencia, "ahorrado");
   saveState(); renderAhorrosLigero(); renderAhorroDisponible();
 });
 
@@ -7727,6 +7767,7 @@ function addMeta(){
   if(!nombre || objetivo<=0){ toast("Completa el nombre y el monto objetivo."); return; }
   const aporteMensual = calcularAporteMeta(objetivo, ahorrado, mesesObjetivo).mensual;
   const nuevaMeta = {id:uid(), nombre, objetivo, ahorrado, fecha, mesesObjetivo, aporteMensual, tasaAnual, creadaEn: fechaLocalHoy()};
+  ccAplicarRendimientos(nuevaMeta, "ahorrado");
   ccMarcarMetaCumplida(nuevaMeta);
   state.metas.push(nuevaMeta);
   ["mNombre","mObjetivo","mAhorrado","mFecha","mMeses","mTasa"].forEach(id=>document.getElementById(id).value="");
@@ -7863,6 +7904,7 @@ function actualizarHintMetaEdit(id){
 let abonandoMetaId = null;
 function confirmarAbonoMeta(id){
   if(!ccPuedeEditarCheck()) return;
+  ccRendimientosAlDia(state);   // si empezó un mes nuevo con la app abierta, primero se suma el rendimiento
   const m = state.metas.find(x=>x.id===id);
   if(!m) return;
   const monto = numFromMasked("abonoMetaInput_"+id);
@@ -7899,6 +7941,7 @@ function saveMetaEdit(id){
   m.aporteMensual = calcularAporteMeta(m.objetivo, m.ahorrado, m.mesesObjetivo).mensual;
   // Si al editarla ya no llega al objetivo, vuelve a quedar en curso.
   if(m.ahorrado < m.objetivo) delete m.cumplidaEn; else ccMarcarMetaCumplida(m);
+  ccAplicarRendimientos(m, "ahorrado");
   editingMetaId = null;
   saveState();
   renderAhorros();
@@ -7960,6 +8003,7 @@ function ccHtmlRendimientosFondo(){
 
 function registrarAporteFondoEmergencia(){
   if(!ccPuedeEditarCheck()) return;
+  ccRendimientosAlDia(state);   // si empezó un mes nuevo con la app abierta, primero se suma el rendimiento
   const monto = numFromMasked("feAporteMontoNuevo");
   const fechaInput = document.getElementById("feAporteFechaNueva");
   const fecha = fechaInput.value || fechaLocalHoy();
@@ -9588,21 +9632,32 @@ function ccAportesPendientesMes(){
   (state.metas||[]).forEach(m=>{
     if(ccMetaCumplida(m) || (m.aporteMensual||0) <= 0 || (m.objetivo||0) <= 0 || (m.ahorrado||0) >= m.objetivo) return;
     if(String(m.ultimoAbono||"").slice(0,7) === mes) return;
+    if(String(m.creadaEn||"").slice(0,7) === mes) return;   // recién creada: empieza a pedir el mes siguiente
     out.push({ tipo:"meta", id:m.id, nombre:m.nombre, icono:"🎯", aporte:m.aporteMensual, ahorrado:m.ahorrado||0, objetivo:m.objetivo });
   });
   return out;
 }
 function ccLeerAvisoAhorro(){ try{ return JSON.parse(localStorage.getItem(CC_CLAVE_AVISO_AHORRO) || "null"); }catch(e){ return null; } }
 // "primero" / "segundo" si hoy toca mostrarlo, false si no.
+// Anota el primer día del mes en que se abrió la app (a cualquier hora, haya o
+// no aportes pendientes). El aviso solo puede salir ese día y el siguiente.
+function ccRegistroAvisoAhorroDelMes(){
+  const hoy = fechaLocalHoy();
+  let reg = ccLeerAvisoAhorro();
+  if(!reg || reg.mes !== hoy.slice(0,7)) reg = { mes: hoy.slice(0,7), primero: hoy, dias: [] };
+  if(!Array.isArray(reg.dias)) reg.dias = [];
+  if(!reg.primero) reg.primero = reg.dias[0] || hoy;   // registros de la versión anterior
+  try{ localStorage.setItem(CC_CLAVE_AVISO_AHORRO, JSON.stringify(reg)); }catch(e){}
+  return reg;
+}
 function ccTocaAvisoAhorro(){
+  const hoy = fechaLocalHoy();
+  const reg = ccRegistroAvisoAhorroDelMes();
   if(window.ccPuedeEditar === false) return false;
   if(new Date().getHours() < 12) return false;
-  const hoy = fechaLocalHoy();
-  const reg = ccLeerAvisoAhorro();
-  if(!reg || reg.mes !== hoy.slice(0,7) || !Array.isArray(reg.dias) || !reg.dias.length) return "primero";
+  if(hoy !== reg.primero && hoy !== ccDiaSiguienteIso(reg.primero)) return false;
   if(reg.dias.includes(hoy)) return false;
-  if(reg.dias.length === 1 && ccDiaSiguienteIso(reg.dias[0]) === hoy) return "segundo";
-  return false;
+  return hoy === reg.primero ? "primero" : "segundo";
 }
 function ccHayVentanaAbierta(){
   return ["ccLock","ccWelcome","ccTerminos","ccAyuda","ccConfirmModal","ccCodigoAccesoModal","ccAvisoAhorro"].some(id=>{
@@ -9616,8 +9671,8 @@ function ccMostrarAvisoAhorro(){
   const items = ccAportesPendientesMes();
   if(!items.length || ccHayVentanaAbierta()) return false;
   const hoy = fechaLocalHoy();
-  const reg = (toca === "primero") ? { mes: hoy.slice(0,7), dias: [hoy] } : Object.assign(ccLeerAvisoAhorro(), {});
-  if(toca === "segundo") reg.dias.push(hoy);
+  const reg = ccRegistroAvisoAhorroDelMes();
+  if(!reg.dias.includes(hoy)) reg.dias.push(hoy);
   try{ localStorage.setItem(CC_CLAVE_AVISO_AHORRO, JSON.stringify(reg)); }catch(e){}
   const filas = items.map(it=> `
       <div style="text-align:left; padding:10px 12px; background:var(--surface-2); border-radius:12px; margin-bottom:8px;">
@@ -10646,6 +10701,7 @@ if(typeof supabase !== "undefined"){
   async function ccUnirConNube(nube){
     ccUniendo = true;
     try{
+      ccRendimientosAlDia(state);
       const nubeEstado = hidratar(ccConCamposDelCelular(nube.datos, state), defaultState());
       const baseJSON = ccLeerBase();
       let resultado;
