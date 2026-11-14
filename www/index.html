@@ -431,9 +431,17 @@
 
   .resumen-row{padding:9px 2px; border-bottom:1px solid var(--line-soft);}
   .resumen-row:last-child{border-bottom:none;}
+  /* Caja de "Presupuestado vs. real": muestra 3 rubros y se desliza por dentro */
+  .cc-resumen-wrap{position:relative;}
+  .cc-resumen-caja{position:relative; overflow:hidden;}
+  .cc-resumen-caja.compacta{overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; padding-right:12px; scrollbar-width:none;}
+  .cc-resumen-caja.compacta::-webkit-scrollbar{display:none;}
+  .cc-resumen-barra{position:absolute; top:4px; bottom:4px; right:0; width:6px; border-radius:3px; background:var(--line-soft); display:none;}
+  .cc-resumen-barra-thumb{position:absolute; left:0; right:0; top:0; border-radius:3px; background:#13B183; min-height:24px;}
   .resumen-row-top{display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:5px;}
-  .resumen-row-top .rr-nombre{font-size:13.5px; font-weight:600; min-width:0; overflow-wrap:break-word;}
-  .resumen-row-nums{display:flex; flex-wrap:wrap; gap:10px; font-family:var(--font-mono); font-size:11.5px; color:var(--ink-soft);}
+  .resumen-row-top .rr-nombre{font-size:15px; font-weight:700; min-width:0; overflow-wrap:break-word;}
+  .resumen-row-nums{display:flex; flex-wrap:wrap; column-gap:12px; row-gap:4px; font-family:var(--font-mono); font-size:13px; color:var(--ink-soft);}
+  .resumen-row-nums .rr-dif{flex-basis:100%; font-size:14px;}
   .resumen-row-nums b{color:var(--ink); font-weight:600;}
   .toggle-link{font-size:12.5px; color:var(--brand-dark); font-weight:700; cursor:pointer; display:inline-block; margin:6px 0 4px;}
 
@@ -1014,15 +1022,18 @@
       </div>
       <div id="gastosList"></div>
 
-      <div onclick="toggleResumen()" id="resumenHead" style="cursor:pointer; margin-top:4px; padding:15px 16px; background:linear-gradient(135deg,#13B183,#0B7D5C); border-radius:14px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 14px rgba(11,125,92,.25);">
-        <div>
-          <div style="color:#fff; font-size:14.5px; font-weight:800;">📊 Presupuestado vs. real por rubro</div>
-          <div style="color:rgba(255,255,255,.9); font-size:12px; margin-top:2px;">Toca para ver cuánto planeaste y cuánto gastaste</div>
-        </div>
-        <span id="chevResumen" style="color:#fff; font-size:22px; font-weight:bold;">▾</span>
+      <div onclick="toggleResumen()" id="resumenHead" style="cursor:pointer; margin-top:4px; padding:15px 16px; background:linear-gradient(135deg,#13B183,#0B7D5C); border-radius:14px; text-align:center; box-shadow:0 4px 14px rgba(11,125,92,.25);">
+        <div style="color:#fff; font-size:14.5px; font-weight:800;">📊 Presupuestado vs. real por rubro</div>
+        <div style="color:rgba(255,255,255,.9); font-size:12px; margin-top:2px;">Toca para ver cuánto planeaste y cuánto gastaste</div>
       </div>
       <div id="resumenBox" style="display:none;">
-        <div class="card" style="padding:12px;"><div id="resumenList"></div></div>
+        <div class="card" style="padding:12px;">
+          <div class="cc-resumen-wrap">
+            <div id="resumenCaja" class="cc-resumen-caja"><div id="resumenList"></div></div>
+            <div id="resumenBarra" class="cc-resumen-barra"><div id="resumenBarraThumb" class="cc-resumen-barra-thumb"></div></div>
+          </div>
+          <div id="resumenVerMas"></div>
+        </div>
       </div>
 
       <h2 class="section-title">Exportar e importar<div class="rule"></div></h2>
@@ -3350,6 +3361,8 @@ function ccCerrarEdicionesAlSalir(name){
       if(verPagoDeudas) toggleVerPagoDeudas();
       if(verGastosFijos) toggleVerGastosFijos();
       pagandoMovimientoId = null; verMovEspecifico = null;
+      verResumenCompleto = false;
+      const caja = document.getElementById("resumenCaja"); if(caja) caja.scrollTop = 0;
     }
     if(name !== "ahorros"){ editingMetaId = null; abonandoMetaId = null; }
     if(name !== "presupuesto"){
@@ -5710,8 +5723,49 @@ function toggleResumen(){
   const box = document.getElementById("resumenBox");
   const abierto = box.style.display !== "none";
   box.style.display = abierto ? "none" : "block";
-  const chev = document.getElementById("chevResumen");
-  if(chev) chev.textContent = abierto ? "▾" : "▴";
+  if(!abierto) ccAjustarCajaResumen();
+}
+/* "Presupuestado vs. real": se ven los 3 primeros rubros dentro de la caja (con
+   una barrita al lado para deslizar) y un botón para ver todos / ver menos. */
+const CC_RESUMEN_VISIBLES = 3;
+let verResumenCompleto = false;
+function ccVerResumenCompleto(ver){
+  verResumenCompleto = !!ver;
+  renderResumen();
+  if(!verResumenCompleto){
+    const head = document.getElementById("resumenHead"), cont = document.getElementById("views");
+    if(head && cont) cont.scrollTo({ top: Math.max(0, head.offsetTop - 90), behavior:"smooth" });
+  }
+}
+function ccAjustarCajaResumen(){
+  const caja = document.getElementById("resumenCaja"), barra = document.getElementById("resumenBarra");
+  const btn = document.getElementById("resumenVerMas");
+  if(!caja) return;
+  const filas = caja.querySelectorAll(".resumen-row");
+  const sobran = filas.length > CC_RESUMEN_VISIBLES;
+  if(btn){
+    btn.innerHTML = !sobran ? "" : (verResumenCompleto
+      ? `<button type="button" class="add-row-btn" style="margin-top:8px;" onclick="ccVerResumenCompleto(false)">▴ Ver menos</button>`
+      : `<button type="button" class="add-row-btn" style="margin-top:8px;" onclick="ccVerResumenCompleto(true)">▾ Ver todos (${filas.length} rubros)</button>`);
+  }
+  const compacta = sobran && !verResumenCompleto;
+  caja.classList.toggle("compacta", compacta);
+  if(barra) barra.style.display = compacta ? "block" : "none";
+  if(!compacta){ caja.style.maxHeight = ""; return; }
+  // Alto exacto de los 3 primeros rubros (se mide cuando la caja está visible)
+  if(!filas[0].offsetHeight) return;
+  const alto = filas[CC_RESUMEN_VISIBLES].offsetTop - filas[0].offsetTop;
+  if(alto > 0) caja.style.maxHeight = alto + "px";
+  ccPintarBarraResumen();
+}
+function ccPintarBarraResumen(){
+  const caja = document.getElementById("resumenCaja"), thumb = document.getElementById("resumenBarraThumb"), barra = document.getElementById("resumenBarra");
+  if(!caja || !thumb || !barra || !caja.classList.contains("compacta")) return;
+  const total = caja.scrollHeight, visible = caja.clientHeight, alto = barra.clientHeight;
+  if(!(total > visible) || !alto) return;
+  const h = Math.max(24, alto * visible / total);
+  thumb.style.height = h + "px";
+  thumb.style.top = ((alto - h) * caja.scrollTop / (total - visible)) + "px";
 }
 
 function renderResumen(){
@@ -5753,12 +5807,15 @@ function renderResumen(){
       <div class="resumen-row-nums">
         <span>Presu. <b>${money(d.presu)}</b></span>
         <span>Real <b>${money(d.real)}</b></span>
-        <span style="color:${d.dif<0?"var(--red)":"var(--brand-dark)"}">Dif. <b>${money(d.dif)}</b></span>
+        <span class="rr-dif" style="color:${d.dif<0?"var(--red)":"var(--brand-dark)"}">Dif. <b style="color:inherit;">${money(d.dif)}</b></span>
       </div>
     </div>`;
   }).join("");
   document.getElementById("resumenList").innerHTML = rows || `<div class="empty-state">Sin rubros configurados.</div>`;
+  ccAjustarCajaResumen();
 }
+document.getElementById("resumenCaja").addEventListener("scroll", ccPintarBarraResumen, { passive:true });
+window.addEventListener("resize", ()=>{ if(ccVistaActual === "gastos") ccAjustarCajaResumen(); });
 
 /* =====================================================================
    EXPORTAR: CSV
@@ -9790,9 +9847,8 @@ function ccIrAGastadoResumen(){
   showView("gastos");
   setTimeout(()=>{
     const box = document.getElementById("resumenBox");
-    const chev = document.getElementById("chevResumen");
     if(box) box.style.display = "block";
-    if(chev) chev.textContent = "▴";
+    ccAjustarCajaResumen();
     const head = document.getElementById("resumenHead");
     const cont = document.getElementById("views");
     ccScrollCentrado(head, cont);
