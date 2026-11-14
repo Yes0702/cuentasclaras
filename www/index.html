@@ -1362,7 +1362,7 @@
       </div>
       </div>
 
-      <h2 class="section-title destacado">Tus inversiones<div class="rule"></div></h2>
+      <h2 class="section-title destacado" id="tusInversionesTitulo">Tus inversiones<div class="rule"></div></h2>
       <div id="inversionesList"></div>
 
       <h2 class="section-title plegable destacado" id="sec4x1000_titulo" role="button" tabindex="0" aria-expanded="false" onclick="ccTogglePlegable('sec4x1000')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();ccTogglePlegable('sec4x1000');}"><svg class="chevron" viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>Calculadora 4x1000<div class="rule"></div></h2>
@@ -2708,6 +2708,13 @@ function ccTogglePlegable(idCaja){
   const abierta = caja.classList.toggle("abierta");
   if(titulo) titulo.setAttribute("aria-expanded", abierta ? "true" : "false");
 }
+function ccCerrarPlegable(idCaja){
+  const caja = document.getElementById(idCaja);
+  if(!caja || !caja.classList.contains("abierta")) return;
+  caja.classList.remove("abierta");
+  const titulo = document.getElementById(idCaja+"_titulo");
+  if(titulo) titulo.setAttribute("aria-expanded", "false");
+}
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 /* Para textos que van DENTRO de un onclick="funcion('...')". esc() solo no basta:
@@ -3373,6 +3380,10 @@ function ccCerrarEdicionesAlSalir(name){
       alarmaAbiertaId = null;
       if(verAlarmasDeuda) toggleVerAlarmasDeuda();
     }
+    // Secciones plegables (Inversiones, Calculadora 4x1000, simulador de crédito):
+    // se cierran las que no son de la pestaña a la que vas.
+    const vista = document.getElementById("view-" + name);
+    document.querySelectorAll(".plegable-caja.abierta").forEach(c=>{ if(!vista || !vista.contains(c)) ccCerrarPlegable(c.id); });
   }catch(e){ console.warn("ccCerrarEdicionesAlSalir", e); }
 }
 function showView(name){
@@ -6998,11 +7009,23 @@ function addInversion(){
   const fecha = document.getElementById("invFecha").value || fechaLocalHoy();
   if(monto<=0 || tasa<=0 || dias<=0){ toast("Completa el monto, la tasa y el plazo."); return; }
   state.inversiones.push({ id: uid(), nombre, monto, tasaAnual: tasa, plazoDias: dias, fecha });
-  document.getElementById("invNombre").value = "";
+  // Formulario limpio y cerrado; se lleva la vista a "Tus inversiones" para ver la nueva.
+  ["invMonto","invTasa","invNombre","invFecha"].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ""; });
+  { const p = document.getElementById("invPlazo"); if(p) p.value = "90"; }
+  calcularInversion();
+  ccCerrarPlegable("secInversiones");
   saveState();
   renderInversiones();
   renderDashboard();
   programarAlarma();
+  setTimeout(()=>{
+    const t = document.getElementById("tusInversionesTitulo"), cont = document.getElementById("views");
+    if(!t || !cont) return;
+    // que el título quede justo debajo del encabezado verde (que tapa la parte de arriba)
+    const top = document.querySelector(".topbar");
+    const bordeArriba = Math.max(cont.getBoundingClientRect().top, top ? top.getBoundingClientRect().bottom : 0);
+    cont.scrollTo({ top: Math.max(0, cont.scrollTop + t.getBoundingClientRect().top - bordeArriba - 12), behavior:"smooth" });
+  }, 60);
   toast("Inversión agregada ✓ Te avisamos un día antes de que se cumpla el plazo.");
 }
 function deleteInversion(id){
