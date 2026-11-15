@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0F8F6B">
 <title>Cuentas Claras · Presupuesto Familiar</title>
 <link rel="manifest" href="manifest.json">
@@ -378,6 +378,9 @@
   .receipt.de-ahorro{ background:rgba(232,145,58,.13); border-color:rgba(232,145,58,.55); }
   .receipt.de-ahorro .r-amount{ color:#D9822B; }
   .receipt .r-ahorro{ font-size:11.5px; font-weight:700; color:#D9822B; margin-top:2px; }
+  .receipt.a-ahorro{ background:rgba(59,130,246,.12); border-color:rgba(59,130,246,.5); }
+  .receipt.a-ahorro .r-amount{ color:#2F6FD6; }
+  .receipt .r-aporte{ font-size:11.5px; font-weight:700; color:#2F6FD6; margin-top:2px; }
   .receipt .r-meta{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
   .receipt .r-amount{font-family:var(--font-mono); font-weight:600; font-size:14.5px; white-space:nowrap; color:var(--money-out);}
   .r-edit{
@@ -1289,6 +1292,9 @@
             <div><input type="text" inputmode="numeric" id="feAporteMontoNuevo" class="mono-input" placeholder="Monto"></div>
             <div><input type="date" id="feAporteFechaNueva"></div>
           </div>
+          <label style="margin-top:4px;">¿De dónde sale el dinero?</label>
+          <select id="feAporteFuente" class="mono-input" style="margin-bottom:4px;"><option value="disponible">💵 Dinero disponible</option><option value="ahorrado">🏦 Ya lo tenía ahorrado</option></select>
+          <div class="hint" style="margin-bottom:8px; line-height:1.4;">Si sale del dinero disponible, se anota en Gastos (en azul) como Ahorro y baja tu disponible.</div>
           <button class="btn-ghost" style="margin-top:8px;" onclick="registrarAporteFondoEmergencia()">+ Agregar aporte</button>
           <label style="margin-top:16px;">Aporte mensual (opcional)</label>
           <input type="text" inputmode="numeric" id="feAporte" class="mono-input" placeholder="0">
@@ -1357,6 +1363,9 @@
         <input type="text" id="invNombre" placeholder="Ej: CDT Bancolombia" style="margin-bottom:10px;">
         <label>¿Qué día se hizo (o se hará) la inversión?</label>
         <input type="date" id="invFecha" style="margin-bottom:12px;">
+        <label style="margin-top:4px;">¿De dónde sale el dinero?</label>
+        <select id="invFuente" class="mono-input" style="margin-bottom:4px;"><option value="disponible">💵 Dinero disponible</option><option value="ahorrado">🏦 Ya lo tenía ahorrado</option></select>
+        <div class="hint" style="margin-bottom:8px; line-height:1.4;">Si sale del dinero disponible, se anota en Gastos (en azul) como Ahorro y baja tu disponible.</div>
         <button class="btn-primary" style="margin-top:0;" onclick="addInversion()">Agregar inversión</button>
         <div class="hint" style="margin-top:8px; line-height:1.5;">Al agregarla, te avisamos un día antes de que se cumpla el plazo (ej: si es a 90 días, el aviso llega el día 89).</div>
       </div>
@@ -3514,13 +3523,17 @@ function renderTopbar(){
     }
   } else if(ccVistaActual === "ahorros"){
     lblEl.textContent = "Sigue invirtiendo";
-    const presuAhorro = ahorroDisponibleMensual();
-    valEl.textContent = money(presuAhorro);
+    const am = ccAhorroDelMes();
+    valEl.textContent = money(am.valor);
     if(extra){
       extra.style.display = "block";
-      extra.textContent = presuAhorro>0
-        ? "Es lo que tu presupuesto destina a ahorro este mes."
-        : "💪 Aún no destinas dinero al ahorro. ¡Empieza con un rubro de Ahorro en tu presupuesto!";
+      extra.textContent = am.real > am.presu
+        ? (am.presu > 0
+            ? "Este mes llevas " + money(am.real) + " ahorrado: " + money(am.real - am.presu) + " más de lo que planeaste (" + money(am.presu) + ")."
+            : "Es lo que llevas aportado este mes a tus ahorros.")
+        : am.presu > 0
+          ? "Es lo que tu presupuesto destina a ahorro este mes." + (am.real > 0 ? " Ya aportaste " + money(am.real) + "." : "")
+          : "💪 Aún no destinas dinero al ahorro. ¡Empieza con un rubro de Ahorro en tu presupuesto!";
     }
   } else if(ccVistaActual === "inicio" && CC_ES_PLAY){
     lblEl.textContent = "Recomienda la app 💚";
@@ -4649,7 +4662,15 @@ function renderPresupuesto(){
     totalRow.innerHTML = `<span>Subtotal ${t}</span><span data-group-subtotal="${t}">${money(groupMonto)}</span>`;
     box.appendChild(totalRow);
     if(t==="Ahorro"){
-      const caja = ccCajaAhorrosDelMes(groupMonto);
+      const realAh = ccAhorradoRealMes(state.mesActivo, state.anioActivo);
+      if(realAh > 0){
+        const ap = document.createElement("div");
+        ap.className = "cc-ahorro-aportado";
+        ap.style.cssText = "margin:8px 12px 0; padding:9px 12px; border-radius:12px; background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.45); color:#2F6FD6; font-size:12.5px; font-weight:700; display:flex; justify-content:space-between; gap:8px;";
+        ap.innerHTML = `<span>🐷 Aportado este mes${realAh > groupMonto ? " (más de lo presupuestado)" : ""}</span><span style="font-family:var(--font-mono);">${money(realAh)}</span>`;
+        box.appendChild(ap);
+      }
+      const caja = ccCajaAhorrosDelMes(Math.max(groupMonto, realAh));
       if(caja) box.appendChild(caja);
     }
   });
@@ -5456,6 +5477,7 @@ function deleteGasto(id){
   limpiarPendiente("gasto:"+id);
   const g = state.gastos.find(x=>x.id===id);
   if(g && g.origenDeuda){ deshacerPagoDeuda(id, g.origenDeuda); return; }
+  if(g && g.aporteA) toast(ccDeshacerAporte(g));
   if(g && g.pagadoCon){ const volvio = ccDevolverAAhorro(g); toast(g.pagadoCon === "fondo" ? "Gasto eliminado: el dinero volvió al fondo de emergencia" : (volvio ? "Gasto eliminado: el dinero volvió a la meta " + (g.pagadoConNombre||"") : "Gasto eliminado (la meta " + (g.pagadoConNombre||"") + " ya no existe)")); }
   state.gastos = state.gastos.filter(g=>g.id!==id);
   saveState();
@@ -5660,11 +5682,12 @@ function pintarGasto(g){
       </div>`;
   }
   return `
-      <div class="receipt${g.pagadoCon ? " de-ahorro" : ""}">
+      <div class="receipt${g.pagadoCon ? " de-ahorro" : (g.aporteA ? " a-ahorro" : "")}">
         <div class="r-main" onclick="openGastoEdit('${g.id}')" style="cursor:pointer;">
           <div class="r-rubro">${ccIconoPorNombreRubro(g.rubro)} ${esc(ccNombreRubroVisible(g.rubro))}</div>
           <div class="r-meta">${esc(g.fecha)} · ${g.mes} ${g.anio}${g.nota ? " · "+esc(g.nota) : ""}</div>
           ${g.pagadoCon ? `<div class="r-ahorro">${esc(ccTextoPagadoCon(g))}</div>` : ""}
+          ${g.aporteA ? `<div class="r-aporte">${esc(ccTextoAporteA(g))}</div>` : ""}
         </div>
         <div class="r-amount" onclick="openGastoEdit('${g.id}')" style="cursor:pointer;">${money(g.monto)}</div>
         <button class="r-edit" onclick="openGastoEdit('${g.id}')" aria-label="Editar" title="Editar">✎</button>
@@ -5715,6 +5738,7 @@ function saveGastoEdit(id){
     const h = (state.fondoEmergencia.historial||[]).find(x=> x.gastoId === g.id);
     if(h){ h.fecha = fecha; h.nota = rubro; }
   }
+  if(g.aporteA) ccAjustarAporteEditado(g, monto, fecha);
   g.rubro = rubro;
   g.monto = monto;
   g.fecha = fecha;
@@ -5791,7 +5815,9 @@ function renderResumen(){
     const real = realPorRubro(r.nombre, mesF, anio);
     const dif = presu-real;
     let orden, estado;
-    if(real>presu && presu>0){
+    if(r.tipo === "Ahorro" && real > presu){
+      orden = 3; estado = '<span class="status-pill ok">✅ Ahorraste de más</span>';
+    } else if(real>presu && presu>0){
       orden = 1; estado = '<span class="status-pill bad">Sobregasto</span>';
     } else if(real>presu && presu===0){
       // gastó en un rubro sin presupuesto: también es sobregasto
@@ -5818,7 +5844,9 @@ function renderResumen(){
       <div class="resumen-row-nums">
         <span>Presu. <b>${money(d.presu)}</b></span>
         <span>Real <b>${money(d.real)}</b></span>
-        <span class="rr-dif" style="color:${d.dif<0?"var(--red)":"var(--brand-dark)"}">Dif. <b style="color:inherit;">${money(d.dif)}</b></span>
+        ${d.r.tipo === "Ahorro" && d.dif < 0
+          ? `<span class="rr-dif" style="color:var(--brand-dark)">Ahorraste de más <b style="color:inherit;">+${money(-d.dif)}</b></span>`
+          : `<span class="rr-dif" style="color:${d.dif<0?"var(--red)":"var(--brand-dark)"}">Dif. <b style="color:inherit;">${money(d.dif)}</b></span>`}
       </div>
     </div>`;
   }).join("");
@@ -7008,7 +7036,9 @@ function addInversion(){
   const nombre = document.getElementById("invNombre").value.trim();
   const fecha = document.getElementById("invFecha").value || fechaLocalHoy();
   if(monto<=0 || tasa<=0 || dias<=0){ toast("Completa el monto, la tasa y el plazo."); return; }
-  state.inversiones.push({ id: uid(), nombre, monto, tasaAnual: tasa, plazoDias: dias, fecha });
+  const nuevaInv = { id: uid(), nombre, monto, tasaAnual: tasa, plazoDias: dias, fecha };
+  if(ccFuenteAporte("invFuente") === "disponible") nuevaInv.gastoAporteId = ccCrearGastoAporte("inversion", nuevaInv.id, nombre || "sin nombre", monto, fecha).id;
+  state.inversiones.push(nuevaInv);
   // Formulario limpio y cerrado; se lleva la vista a "Tus inversiones" para ver la nueva.
   ["invMonto","invTasa","invNombre","invFecha"].forEach(id=>{ const el = document.getElementById(id); if(el) el.value = ""; });
   { const p = document.getElementById("invPlazo"); if(p) p.value = "90"; }
@@ -7886,7 +7916,7 @@ function addMeta(){
 /* Si lo asignado supera lo disponible, lleva la pantalla arriba al aviso
    naranja para que el usuario no lo pase por alto, y lo resalta un momento. */
 function ccAvisarSiExcedeAhorro(){
-  const disponible = ahorroDisponibleMensual();
+  const disponible = ccAhorroDelMes().valor;
   const comprometido = totalComprometidoAhorro();
   if(comprometido > disponible){
     const box = document.getElementById("ahorroDisponibleBox");
@@ -8012,6 +8042,7 @@ function confirmarAbonoMeta(id){
   if(!m) return;
   const monto = numFromMasked("abonoMetaInput_"+id);
   if(monto<=0){ toast("Ingresa un monto mayor a cero."); return; }
+  if(ccFuenteAporte("abonoMetaFuente_"+id) === "disponible") ccCrearGastoAporte("meta", m.id, m.nombre, monto, fechaLocalHoy());
   m.ahorrado += monto;
   m.ultimoAbono = fechaLocalHoy();   // para el recordatorio del aporte del mes
   const recienCumplida = ccMarcarMetaCumplida(m);
@@ -8111,8 +8142,14 @@ function registrarAporteFondoEmergencia(){
   const fechaInput = document.getElementById("feAporteFechaNueva");
   const fecha = fechaInput.value || fechaLocalHoy();
   if(monto<=0){ toast("Ingresa un monto mayor a cero."); return; }
+  const fuente = ccFuenteAporte("feAporteFuente");
   state.fondoEmergencia.ahorrado = (state.fondoEmergencia.ahorrado||0) + monto;
-  state.fondoEmergencia.historial.push({id:uid(), fecha, monto});
+  const entrada = {id:uid(), fecha, monto};
+  if(fuente === "disponible"){
+    const g = ccCrearGastoAporte("fondo", "fondo", "Fondo de emergencia", monto, fecha);
+    entrada.gastoAporteId = g.id; g.aporteRef = entrada.id;
+  }
+  state.fondoEmergencia.historial.push(entrada);
   document.getElementById("feAporteMontoNuevo").value = "";
   fechaInput.value = fechaLocalHoy();
   saveState();
@@ -8128,6 +8165,7 @@ function eliminarAporteFondoEmergencia(id){
   limpiarPendiente("feaporte:"+id);
   state.fondoEmergencia.ahorrado = Math.max(0, (state.fondoEmergencia.ahorrado||0) - entrada.monto);
   state.fondoEmergencia.historial = state.fondoEmergencia.historial.filter(h=>h.id!==id);
+  if(entrada.gastoAporteId) state.gastos = state.gastos.filter(g=> g.id !== entrada.gastoAporteId);   // su gasto azul también se va
   saveState();
   renderAhorros();
   renderDashboard();
@@ -8147,7 +8185,7 @@ function renderFeHistorial(){
       <div class="r-amount">−${money(Math.abs(h.monto||0))}</div>
     </div>` : `
     <div class="receipt">
-      <div class="r-main"><div class="r-rubro">Aporte al fondo de emergencia</div><div class="r-meta">${esc(h.fecha)}</div></div>
+      <div class="r-main"><div class="r-rubro">Aporte al fondo de emergencia</div><div class="r-meta">${esc(h.fecha)}${h.gastoAporteId ? " · salió del dinero disponible" : ""}</div></div>
       <div class="r-amount" style="color:var(--brand-dark);">+${money(h.monto)}</div>
       ${esPendiente("feaporte:"+h.id)
         ? `<button class="r-del confirm" onclick="eliminarAporteFondoEmergencia('${h.id}')">✓ Eliminar</button>`
@@ -8190,6 +8228,102 @@ function ccCajaAhorrosDelMes(enAhorro){
     + `</div>`;
   return caja;
 }
+/* ---- Aportes a ahorros (fondo, metas, inversiones) ----
+   Si la plata sale del dinero disponible, se anota sola como un gasto del rubro
+   de Ahorro (en azul en Gastos) para que el disponible baje. Ese gasto queda
+   enlazado: si se borra, se deshace el aporte; si se le cambia el monto, el
+   fondo / la meta / la inversión se ajustan. */
+function ccRubroAhorroNombre(){
+  let r = state.rubros.find(x=> x.tipo === "Ahorro");
+  if(r) return r.nombre;
+  const libre = ["Ahorro","Ahorros","Ahorro del mes"].find(n=> !state.rubros.some(x=> String(x.nombre).toLowerCase() === n.toLowerCase()));
+  const maxPrio = state.rubros.reduce((mx,x)=> Math.max(mx, x.prioridad||0), 0);
+  // Con la misma forma que tienen los rubros al cargar (normalizarRubro), para que si dos
+  // celulares lo crean a la vez se reconozcan como el mismo y no pregunte nada.
+  r = normalizarRubro({ nombre: libre || ("Ahorro " + uid().slice(-3)), tipo:"Ahorro", prioridad: maxPrio+1, modo:"valor", valor:0, pct:0, diaPago:0 }, state.ingreso);
+  state.rubros.push(r);
+  return r.nombre;
+}
+function ccFuenteAporte(idSelect){
+  const el = document.getElementById(idSelect);
+  const v = el ? el.value : "disponible";
+  if(el) el.value = "disponible";
+  return v === "ahorrado" ? "ahorrado" : "disponible";
+}
+function ccCrearGastoAporte(destino, destinoId, nombreDestino, monto, fecha){
+  const f = /^\d{4}-\d{2}-\d{2}$/.test(fecha||"") ? fecha : fechaLocalHoy();
+  const d = new Date(f + "T00:00:00");
+  const etiqueta = destino === "fondo" ? "Fondo de emergencia" : destino === "meta" ? "Meta " + nombreDestino : "Inversión " + nombreDestino;
+  const g = { id: uid(), fecha: f, mes: MESES[d.getMonth()], anio: d.getFullYear(), rubro: ccRubroAhorroNombre(),
+    monto: Math.round(monto), nota: etiqueta, aporteA: destino, aporteAId: destinoId, aporteANombre: nombreDestino };
+  state.gastos.push(g);
+  return g;
+}
+function ccTextoAporteA(g){
+  if(!g || !g.aporteA) return "";
+  if(g.aporteA === "fondo") return "🐷 Aporte al fondo de emergencia";
+  if(g.aporteA === "meta") return "🐷 Ahorro para la meta " + (g.aporteANombre||"");
+  return "🐷 Inversión " + (g.aporteANombre||"");
+}
+// Al borrar el gasto azul se deshace el aporte. Devuelve el mensaje para el usuario.
+function ccDeshacerAporte(g){
+  ccRendimientosAlDia(state);
+  const monto = Math.round(g.monto||0);
+  if(g.aporteA === "fondo"){
+    const fe = state.fondoEmergencia;
+    fe.ahorrado = Math.max(0, Math.round((fe.ahorrado||0) - monto));
+    fe.historial = (fe.historial||[]).filter(h=> !(h.gastoAporteId === g.id || (g.aporteRef && h.id === g.aporteRef)));
+    return "Gasto eliminado: también se quitó el aporte del fondo de emergencia";
+  }
+  if(g.aporteA === "meta"){
+    const m = (state.metas||[]).find(x=> x.id === g.aporteAId);
+    if(!m) return "Gasto eliminado (la meta " + (g.aporteANombre||"") + " ya no existe)";
+    m.ahorrado = Math.max(0, Math.round((m.ahorrado||0) - monto));
+    if(m.cumplidaEn && m.objetivo > 0 && m.ahorrado < m.objetivo) delete m.cumplidaEn;
+    return "Gasto eliminado: se le quitaron " + money(monto) + " a la meta " + m.nombre;
+  }
+  if(g.aporteA === "inversion"){
+    const inv = (state.inversiones||[]).find(x=> x.id === g.aporteAId);
+    if(!inv) return "Gasto eliminado";
+    state.inversiones = state.inversiones.filter(x=> x !== inv);
+    if(typeof programarAlarma === "function") programarAlarma();
+    return "Gasto eliminado: también se quitó la inversión " + (inv.nombre||"");
+  }
+  return "Gasto eliminado";
+}
+// Al editar el monto/fecha del gasto azul, el fondo / la meta / la inversión se ajustan.
+function ccAjustarAporteEditado(g, montoNuevo, fechaNueva){
+  const delta = Math.round(montoNuevo - (g.monto||0));
+  if(g.aporteA === "fondo"){
+    const fe = state.fondoEmergencia;
+    if(delta){ ccRendimientosAlDia(state); fe.ahorrado = Math.max(0, Math.round((fe.ahorrado||0) + delta)); }
+    const h = (fe.historial||[]).find(x=> x.gastoAporteId === g.id || (g.aporteRef && x.id === g.aporteRef));
+    if(h){ h.monto = Math.round(montoNuevo); h.fecha = fechaNueva; }
+  } else if(g.aporteA === "meta" && delta){
+    const m = (state.metas||[]).find(x=> x.id === g.aporteAId);
+    if(m){
+      ccRendimientosAlDia(state);
+      m.ahorrado = Math.max(0, Math.round((m.ahorrado||0) + delta));
+      if(m.ahorrado < m.objetivo) delete m.cumplidaEn; else ccMarcarMetaCumplida(m);
+    }
+  } else if(g.aporteA === "inversion" && delta){
+    const inv = (state.inversiones||[]).find(x=> x.id === g.aporteAId);
+    if(inv) inv.monto = Math.round(montoNuevo);
+  }
+}
+// Lo que se ha ahorrado de verdad en el mes: gastos del rubro de Ahorro y aportes
+// (sin contar lo que se pagó usando ahorros, que no es ahorro nuevo).
+function ccAhorradoRealMes(mes, anio){
+  const nombres = new Set(state.rubros.filter(r=> r.tipo === "Ahorro").map(r=> r.nombre));
+  return state.gastos.filter(g=> !g.pagadoCon && (g.aporteA || nombres.has(g.rubro)) && g.mes === mes && g.anio === anio)
+    .reduce((s,g)=> s + (g.monto||0), 0);
+}
+// El ahorro del mes: lo presupuestado en Ahorro, o lo aportado si es más.
+function ccAhorroDelMes(){
+  const presu = ahorroDisponibleMensual();
+  const real = ccAhorradoRealMes(state.mesActivo, state.anioActivo);
+  return { presu, real, valor: Math.max(presu, real) };
+}
 function ahorroDisponibleMensual(){
   // suma de los rubros tipo "Ahorro" según el presupuesto
   return state.rubros.filter(r=>r.tipo==="Ahorro").reduce((s,r)=>s+montoRubro(r),0);
@@ -8207,7 +8341,8 @@ function totalComprometidoAhorro(){
 function renderAhorroDisponible(){
   const box = document.getElementById("ahorroDisponibleBox");
   if(!box) return;
-  const disponible = ahorroDisponibleMensual();
+  const am = ccAhorroDelMes();
+  const disponible = am.valor;
   const comprometido = totalComprometidoAhorro();
   const deudaConInteres = state.deudas.some(d=>(d.tasaAnual||0) >= 20 && d.saldo>0);
   const seExcede = comprometido > disponible && disponible >= 0;
@@ -8218,9 +8353,9 @@ function renderAhorroDisponible(){
     : "linear-gradient(135deg,#13B183,#0B7D5C)";
 
   let html = `<div style="padding:14px 16px; background:${fondo}; color:#fff; border-radius:16px; margin-bottom:16px;">
-    <div style="font-size:13px; opacity:.9;">Según tu presupuesto, puedes ahorrar al mes</div>
+    <div style="font-size:13px; opacity:.9;">${am.real > am.presu ? "Este mes llevas ahorrado" : "Según tu presupuesto, puedes ahorrar al mes"}</div>
     <div style="font-size:26px; font-weight:800; margin-top:2px;">${money(disponible)}</div>
-    <div style="font-size:11.5px; opacity:.9; margin-top:2px;">Este es el dinero del rubro <b>Ahorro</b>. Repártelo entre tu Fondo de emergencia y tus Metas (viaje, SOAT, compras…).</div>
+    <div style="font-size:11.5px; opacity:.9; margin-top:2px;">${am.real > am.presu ? "Es lo que llevas aportado este mes (tu presupuesto de Ahorro es " + money(am.presu) + ")." : "Este es el dinero del rubro <b>Ahorro</b>. Repártelo entre tu Fondo de emergencia y tus Metas (viaje, SOAT, compras…)."}</div>
 
     <div style="display:flex; gap:8px; margin-top:12px;">
       <div style="flex:1; padding:9px 11px; background:rgba(255,255,255,.16); border-radius:10px;">
@@ -8356,6 +8491,9 @@ function renderAhorros(){
       ${abonandoMetaId===m.id
         ? `<div onclick="event.stopPropagation();">
              <input type="text" inputmode="numeric" id="abonoMetaInput_${m.id}" class="mono-input" placeholder="Monto a agregar" style="margin-bottom:8px;">
+             <label style="margin-top:4px;">¿De dónde sale el dinero?</label>
+             <select id="abonoMetaFuente_${m.id}" class="mono-input" style="margin-bottom:4px;"><option value="disponible">💵 Dinero disponible</option><option value="ahorrado">🏦 Ya lo tenía ahorrado</option></select>
+             <div class="hint" style="margin-bottom:8px; line-height:1.4;">Si sale del dinero disponible, se anota en Gastos (en azul) como Ahorro y baja tu disponible.</div>
              <div class="edit-actions">
                <button class="btn-primary" style="margin:0;" onclick="event.stopPropagation(); confirmarAbonoMeta('${m.id}')">Registrar</button>
                <button class="btn-ghost" style="margin:0;" onclick="event.stopPropagation(); abonandoMetaId=null; renderAhorros();">Cancelar</button>
