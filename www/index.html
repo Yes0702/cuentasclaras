@@ -5167,6 +5167,7 @@ function addGasto(){
   state.gastos.push(nuevoGasto);
   if(!state.usoRubros) state.usoRubros = {};
   state.usoRubros[rubro] = (state.usoRubros[rubro]||0) + 1;
+  ccRecordatoriosCumplidos();   // ya anotó: el recordatorio de hoy queda cumplido
   document.getElementById("gMonto").value = "";
   document.getElementById("gNota").value = "";
   saveState();
@@ -9773,18 +9774,43 @@ function renderResumenSemanal(){
   cont.appendChild(div);
 }
 
+/* El recuadro café de "Un momento para anotar tus gastos" es el respaldo de la
+   notificación: si las notificaciones tienen permiso (ya le llegó el aviso al
+   celular), no se muestra. */
+let ccNotifsConPermiso = null;   // null = aún no se sabe
+async function ccRevisarPermisoNotifs(){
+  let ok = false;
+  try{
+    if(ccNativo()) ok = await ccEstadoPermisoNativo();
+    else ok = ("Notification" in window) && Notification.permission === "granted";
+  }catch(e){ ok = false; }
+  const cambio = ok !== ccNotifsConPermiso;
+  ccNotifsConPermiso = ok;
+  if(cambio) renderRecordatorioBanner();
+  return ok;
+}
+// Al anotar un gasto ya se cumplió lo que pedía el recordatorio de hoy.
+function ccRecordatoriosCumplidos(){
+  const ahora = new Date();
+  let alguno = false;
+  (state.alarmas||[]).filter(a=>alarmaEstaDebida(a, ahora)).forEach(a=>{ a.ultimoAviso = ahora.toISOString(); alguno = true; });
+  if(alguno) renderRecordatorioBanner();
+  return alguno;
+}
 function renderRecordatorioBanner(){
   const cont = document.getElementById("recordatorioBanner");
   if(!cont) return;
   const ahora = new Date();
-  const debidas = (state.alarmas||[]).filter(a=>alarmaEstaDebida(a, ahora));
-  if(debidas.length===0){ cont.innerHTML = ""; return; }
+  if(ccNotifsConPermiso === null){ ccRevisarPermisoNotifs(); }
+  const debidas = ccNotifsConPermiso === false ? (state.alarmas||[]).filter(a=>alarmaEstaDebida(a, ahora)) : [];
+  if(debidas.length===0){ const b = cont.querySelector(".banner"); if(b) b.remove(); return; }
   const nombres = debidas.map(a=>a.nombre).join(" · ");
-  cont.innerHTML = `<div class="banner">
+  const viejo = cont.querySelector(".banner"); if(viejo) viejo.remove();
+  cont.insertAdjacentHTML("afterbegin", `<div class="banner">
     <div class="b-ico">⏰</div>
     <div class="b-txt">${esc(mensajeRecordatorio())} (${esc(nombres)})</div>
     <button onclick="cerrarRecordatorio()">Registrar</button>
-  </div>`;
+  </div>`);
 }
 function cerrarRecordatorio(){
   const ahora = new Date();
@@ -10159,7 +10185,7 @@ setTimeout(ccChequearActualizacion, 2000);
 
 // al volver a la app, revisa si se pasó un recordatorio
 document.addEventListener("visibilitychange", ()=>{
-  if(!document.hidden){ programarAlarma(); renderRecordatorioBanner(); }
+  if(!document.hidden){ programarAlarma(); ccRevisarPermisoNotifs(); renderRecordatorioBanner(); }
 });
 
 /* =====================================================================
